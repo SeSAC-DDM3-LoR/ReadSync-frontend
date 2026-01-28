@@ -113,11 +113,7 @@ const Header: React.FC = () => {
               <Search size={20} />
             </button>
 
-            {/* 알림 */}
-            <button className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+
 
             {/* 장바구니 */}
             <Link to="/cart" className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">

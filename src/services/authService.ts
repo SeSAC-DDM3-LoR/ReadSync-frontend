@@ -39,6 +39,9 @@ export interface UserDetail {
     levelId: number;
     experience: number;
     preferredGenre: string | null;
+    readBookCount: number;
+    reviewCount: number;
+    totalCredit: number;
 }
 
 export interface UserLoginResponse {
@@ -61,6 +64,9 @@ export interface UserProfile {
     experience: number;
     preferredGenre: string;
     providerId: string;
+    readBookCount: number;
+    reviewCount: number;
+    totalCredit: number;
 }
 
 // ==================== Auth Service ====================
@@ -153,11 +159,18 @@ export const authService = {
     },
 
     /**
-     * 토큰 삭제
+     * 이미지 업로드
      */
-    clearTokens: (): void => {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
+    uploadImage: async (file: File): Promise<string> => {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const response = await api.post<string>('/v1/files/upload', formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
     },
 };
 

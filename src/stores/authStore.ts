@@ -96,13 +96,17 @@ export const useAuthStore = create<AuthState>()(
                             levelId: currentUser?.levelId || 1,
                             experience: profile.experience,
                             preferredGenre: profile.preferredGenre,
+                            readBookCount: profile.readBookCount || 0,
+                            reviewCount: profile.reviewCount || 0,
+                            totalCredit: profile.totalCredit || 0,
                         },
                         isAuthenticated: true,
                         isLoading: false,
                     });
                 } catch (error) {
                     console.error('Failed to fetch user:', error);
-                    authService.clearTokens();
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
                     set({ user: null, isAuthenticated: false, isLoading: false });
                 }
             },
