@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    BookOpen, Star, ShoppingCart, Heart, Share2, ArrowLeft
-
-    ,
+    BookOpen, Star, ShoppingCart, Heart, Share2, ArrowLeft,
     Clock, User, Calendar, Globe, Loader2, ChevronRight, AlertCircle,
-    ThumbsUp, ThumbsDown, Plus, Crown
+    ThumbsUp, ThumbsDown, Plus, Crown, Check, Package
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -32,6 +30,10 @@ const BookDetailPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'info' | 'chapters' | 'reviews'>('info');
     const [isAddingToCart, setIsAddingToCart] = useState(false);
+    const [purchasedBookIds, setPurchasedBookIds] = useState<Set<number>>(new Set());
+    const [isLoadingPurchased, setIsLoadingPurchased] = useState(true);
+    const [cartBookIds, setCartBookIds] = useState<Set<number>>(new Set());
+    const [isLoadingCart, setIsLoadingCart] = useState(true);
 
     // 프로필 팝업 상태
     const [profilePopup, setProfilePopup] = useState<{ isOpen: boolean; userId: number; position?: { x: number; y: number } }>({
@@ -53,7 +55,37 @@ const BookDetailPage: React.FC = () => {
         if (id) {
             loadBookData(parseInt(id));
         }
-    }, [id]);
+        if (isAuthenticated) {
+            loadPurchasedBooks();
+            loadCartItems();
+        }
+    }, [id, isAuthenticated]);
+
+    const loadCartItems = async () => {
+        setIsLoadingCart(true);
+        try {
+            const cartItems = await cartService.getCart();
+            const cartIds = new Set(cartItems.map(item => item.bookId));
+            setCartBookIds(cartIds);
+        } catch (err) {
+            console.error('Failed to load cart items:', err);
+        } finally {
+            setIsLoadingCart(false);
+        }
+    };
+
+    const loadPurchasedBooks = async () => {
+        setIsLoadingPurchased(true);
+        try {
+            const purchasedBooks = await bookService.getPurchasedBooks();
+            const purchasedIds = new Set(purchasedBooks.map(b => b.bookId));
+            setPurchasedBookIds(purchasedIds);
+        } catch (err) {
+            console.error('Failed to load purchased books:', err);
+        } finally {
+            setIsLoadingPurchased(false);
+        }
+    };
 
     const loadBookData = async (bookId: number) => {
         setIsLoading(true);
@@ -82,9 +114,17 @@ const BookDetailPage: React.FC = () => {
         }
         if (!book) return;
 
+        // 이미 장바구니에 있는 경우 방지
+        if (cartBookIds.has(book.bookId)) {
+            alert('이미 장바구니에 담긴 책입니다.');
+            return;
+        }
+
         setIsAddingToCart(true);
         try {
             await cartService.addToCart({ bookId: book.bookId, quantity: 1 });
+            // 장바구니에 추가 성공 시 상태 업데이트
+            setCartBookIds(prev => new Set(prev).add(book.bookId));
             alert('장바구니에 추가되었습니다!');
         } catch (error: any) {
             console.error('Failed to add to cart:', error);
@@ -210,18 +250,44 @@ const BookDetailPage: React.FC = () => {
 
                             {/* 액션 버튼 */}
                             <div className="flex flex-wrap gap-3 mb-8">
-                                <button
-                                    onClick={handleAddToCart}
-                                    disabled={isAddingToCart}
-                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all disabled:opacity-50"
-                                >
-                                    {isAddingToCart ? (
+                                {isLoadingPurchased || isLoadingCart ? (
+                                    <button
+                                        disabled
+                                        className="flex items-center gap-2 px-6 py-3 bg-gray-300 text-white font-bold rounded-xl opacity-50"
+                                    >
                                         <Loader2 size={20} className="animate-spin" />
-                                    ) : (
-                                        <ShoppingCart size={20} />
-                                    )}
-                                    장바구니 담기
-                                </button>
+                                        확인 중...
+                                    </button>
+                                ) : purchasedBookIds.has(book.bookId) ? (
+                                    <button
+                                        disabled
+                                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg cursor-not-allowed"
+                                    >
+                                        <Check size={20} />
+                                        구매 완료
+                                    </button>
+                                ) : cartBookIds.has(book.bookId) ? (
+                                    <button
+                                        onClick={() => navigate('/cart')}
+                                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all"
+                                    >
+                                        <Package size={20} />
+                                        장바구니로 가기
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleAddToCart}
+                                        disabled={isAddingToCart}
+                                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all disabled:opacity-50"
+                                    >
+                                        {isAddingToCart ? (
+                                            <Loader2 size={20} className="animate-spin" />
+                                        ) : (
+                                            <ShoppingCart size={20} />
+                                        )}
+                                        장바구니 담기
+                                    </button>
+                                )}
                                 <button className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-emerald-200 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors">
                                     <Heart size={20} />
                                     찜하기

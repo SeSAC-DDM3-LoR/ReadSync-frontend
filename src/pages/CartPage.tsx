@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    ShoppingCart, Trash2, Plus, Minus, Loader2, ArrowRight,
-    BookOpen, AlertCircle
+    ShoppingCart, Trash2, Loader2, ArrowRight,
+    BookOpen
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -17,7 +17,6 @@ const CartPage: React.FC = () => {
 
     const [items, setItems] = useState<CartItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [updatingId, setUpdatingId] = useState<number | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -36,19 +35,6 @@ const CartPage: React.FC = () => {
             console.error('Failed to load cart:', error);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const handleUpdateQuantity = async (cartId: number, quantity: number) => {
-        if (quantity < 1) return;
-        setUpdatingId(cartId);
-        try {
-            const updated = await cartService.updateCartItem(cartId, quantity);
-            setItems(items.map((item) => (item.cartId === cartId ? updated : item)));
-        } catch (error) {
-            console.error('Failed to update quantity:', error);
-        } finally {
-            setUpdatingId(null);
         }
     };
 
@@ -133,37 +119,15 @@ const CartPage: React.FC = () => {
                                                     ₩{item.price.toLocaleString()}
                                                 </p>
 
-                                                {/* 수량 조절 */}
-                                                <div className="flex items-center gap-4 mt-3">
-                                                    <div className="flex items-center gap-2 bg-gray-100 rounded-xl p-1">
-                                                        <button
-                                                            onClick={() => handleUpdateQuantity(item.cartId, item.quantity - 1)}
-                                                            disabled={item.quantity <= 1 || updatingId === item.cartId}
-                                                            className="w-8 h-8 rounded-lg bg-white flex items-center justify-center disabled:opacity-50"
-                                                        >
-                                                            <Minus size={16} />
-                                                        </button>
-                                                        <span className="w-8 text-center font-bold">
-                                                            {updatingId === item.cartId ? (
-                                                                <Loader2 size={16} className="animate-spin mx-auto" />
-                                                            ) : (
-                                                                item.quantity
-                                                            )}
-                                                        </span>
-                                                        <button
-                                                            onClick={() => handleUpdateQuantity(item.cartId, item.quantity + 1)}
-                                                            disabled={updatingId === item.cartId}
-                                                            className="w-8 h-8 rounded-lg bg-white flex items-center justify-center disabled:opacity-50"
-                                                        >
-                                                            <Plus size={16} />
-                                                        </button>
-                                                    </div>
-
+                                                {/* 삭제 버튼만 표시 */}
+                                                <div className="flex items-center gap-2 mt-3">
+                                                    <span className="text-sm text-gray-500">수량: 1개</span>
                                                     <button
                                                         onClick={() => handleRemove(item.cartId)}
-                                                        className="text-red-500 hover:text-red-600 p-2"
+                                                        className="ml-auto text-red-500 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
                                                     >
                                                         <Trash2 size={18} />
+                                                        <span className="text-sm">삭제</span>
                                                     </button>
                                                 </div>
                                             </div>

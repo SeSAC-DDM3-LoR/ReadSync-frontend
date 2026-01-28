@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { CreditCard, Check, Loader2, ArrowLeft, ShieldCheck, AlertCircle } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -9,8 +9,32 @@ import { cartService } from '../services/cartService';
 import { paymentService } from '../services/paymentService';
 import type { CartItem } from '../services/cartService';
 
+// TossPayments 타입 선언
+declare global {
+    interface Window {
+        TossPayments: (clientKey: string) => {
+            widgets: (options: { customerKey: string }) => TossPaymentsWidgets;
+        };
+    }
+}
+
+interface TossPaymentsWidgets {
+    setAmount: (amount: { currency: string; value: number }) => Promise<void>;
+    renderPaymentMethods: (options: { selector: string; variantKey?: string }) => Promise<void>;
+    renderAgreement: (options: { selector: string; variantKey?: string }) => Promise<void>;
+    requestPayment: (options: {
+        orderId: string;
+        orderName: string;
+        successUrl: string;
+        failUrl: string;
+        customerEmail?: string;
+        customerName?: string;
+    }) => Promise<void>;
+}
+
 const CheckoutPage: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { isAuthenticated } = useAuthStore();
 
     // State
@@ -18,64 +42,213 @@ const CheckoutPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isWidgetReady, setIsWidgetReady] = useState(false);
+    const [resultMessage, setResultMessage] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+    // Refs for TossPayments
+    const widgetsRef = useRef<TossPaymentsWidgets | null>(null);
+    const isInitializedRef = useRef(false);
+
+    // 금액 계산
+    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const discountAmount = 0;
+    const finalAmount = totalAmount - discountAmount;
+
+    // 결제 리다이렉트 처리
+    const processPaymentRedirect = useCallback(async () => {
+        const paymentKey = searchParams.get('paymentKey');
+        const orderId = searchParams.get('orderId');
+        const amount = searchParams.get('amount');
+        const errorCode = searchParams.get('code');
+        const errorMessage = searchParams.get('message');
+
+        // 결제 성공 리다이렉트
+        if (paymentKey && orderId && amount) {
+            setIsProcessing(true);
+            try {
+                await paymentService.confirmPayment({
+                    paymentKey,
+                    orderId,
+                    amount: parseInt(amount)
+                });
+
+                setResultMessage({
+                    type: 'success',
+                    message: `결제가 완료되었습니다! (주문번호: ${orderId})`
+                });
+
+                // URL 파라미터 제거
+                window.history.replaceState({}, '', window.location.pathname);
+
+                // 잠시 후 마이페이지로 이동
+                setTimeout(() => {
+                    navigate('/mypage/credits');
+                }, 2000);
+
+            } catch (err: any) {
+                console.error('Payment confirmation failed:', err);
+                setError(err.response?.data?.message || '결제 승인 중 오류가 발생했습니다.');
+                window.history.replaceState({}, '', window.location.pathname);
+            } finally {
+                setIsProcessing(false);
+            }
+            return true;
+        }
+
+        // 결제 실패 리다이렉트
+        if (errorCode) {
+            setError(`결제 실패: ${errorMessage || errorCode}`);
+            window.history.replaceState({}, '', window.location.pathname);
+            return true;
+        }
+
+        return false;
+    }, [searchParams, navigate]);
+
+    // TossPayments SDK 로드
+    const loadTossPaymentsSDK = useCallback(() => {
+        return new Promise<void>((resolve, reject) => {
+            if (typeof window.TossPayments !== 'undefined') {
+                resolve();
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://js.tosspayments.com/v2/standard';
+            script.async = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('TossPayments SDK 로드 실패'));
+            document.head.appendChild(script);
+        });
+    }, []);
+
+    // 결제 위젯 초기화
+    const initPaymentWidget = useCallback(async (amount: number) => {
+        if (isInitializedRef.current || !window.TossPayments) return;
+
+        try {
+            // 일반 결제용 테스트 클라이언트 키 (payment.html과 동일)
+            const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
+            const customerKey = 'CUSTOMER_' + Math.random().toString(36).substring(2, 12);
+
+            const tossPayments = window.TossPayments(clientKey);
+            const widgets = tossPayments.widgets({ customerKey });
+            widgetsRef.current = widgets;
+
+            // 금액 설정
+            await widgets.setAmount({
+                currency: 'KRW',
+                value: amount
+            });
+
+            // 결제 수단 렌더링
+            await widgets.renderPaymentMethods({
+                selector: '#payment-widget-container',
+                variantKey: 'DEFAULT'
+            });
+
+            // 이용약관 렌더링
+            await widgets.renderAgreement({
+                selector: '#agreement-container',
+                variantKey: 'AGREEMENT'
+            });
+
+            isInitializedRef.current = true;
+            setIsWidgetReady(true);
+
+        } catch (err) {
+            console.error('Widget initialization failed:', err);
+            setError('결제 위젯을 초기화하는데 실패했습니다.');
+        }
+    }, []);
+
+    // 페이지 로드 시 초기화
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
             return;
         }
-        loadCart();
-    }, [isAuthenticated]);
 
-    const loadCart = async () => {
-        try {
-            const items = await cartService.getCart();
-            setCartItems(items);
-            if (items.length === 0) {
-                // 장바구니가 비었으면 돌아가기
-                alert("장바구니가 비어있습니다.");
-                navigate('/cart');
+        const initialize = async () => {
+            // 결제 리다이렉트 처리 먼저 확인
+            const isRedirect = await processPaymentRedirect();
+            if (isRedirect) {
+                setIsLoading(false);
+                return;
             }
-        } catch (err) {
-            console.error("Failed to load cart:", err);
-            setError("장바구니 정보를 불러오는데 실패했습니다.");
-        } finally {
-            setIsLoading(false);
+
+            // 장바구니 로드
+            try {
+                const items = await cartService.getCart();
+                setCartItems(items);
+
+                if (items.length === 0) {
+                    alert('장바구니가 비어있습니다.');
+                    navigate('/cart');
+                    return;
+                }
+
+                // 금액 계산
+                const total = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+                // SDK 로드 및 위젯 초기화
+                await loadTossPaymentsSDK();
+                await initPaymentWidget(total);
+
+            } catch (err) {
+                console.error('Failed to load cart:', err);
+                setError('장바구니 정보를 불러오는데 실패했습니다.');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        initialize();
+    }, [isAuthenticated, navigate, processPaymentRedirect, loadTossPaymentsSDK, initPaymentWidget]);
+
+    // 금액 변경 시 위젯 업데이트
+    useEffect(() => {
+        if (widgetsRef.current && finalAmount > 0) {
+            widgetsRef.current.setAmount({
+                currency: 'KRW',
+                value: finalAmount
+            });
         }
-    };
+    }, [finalAmount]);
 
-
-    // 금액 계산
-    const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const discountAmount = 0; // 추후 쿠폰/포인트 등 적용 가능
-    const finalAmount = totalAmount - discountAmount;
-
+    // 결제 요청
     const handlePayment = async () => {
-        if (finalAmount <= 0) return;
+        if (!widgetsRef.current || finalAmount <= 0) {
+            setError('결제 위젯이 준비되지 않았습니다.');
+            return;
+        }
 
         setIsProcessing(true);
         setError(null);
 
         try {
-            // [TEST MODE] 가짜 결제 키 및 주문 ID 생성/사용
-            const testPaymentKey = `TEST_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-            const testOrderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+            const orderId = `ORDER_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            const orderName = cartItems.length > 1
+                ? `${cartItems[0].title} 외 ${cartItems.length - 1}건`
+                : cartItems[0]?.title || 'ReadSync 도서 구매';
 
-            // 백엔드에 결제 승인 요청 (Mock 동작)
-            await paymentService.confirmPayment({
-                paymentKey: testPaymentKey,
-                orderId: testOrderId,
-                amount: finalAmount
+            await widgetsRef.current.requestPayment({
+                orderId,
+                orderName,
+                successUrl: `${window.location.origin}/checkout`,
+                failUrl: `${window.location.origin}/checkout`,
+                customerEmail: 'customer@readsync.com',
+                customerName: 'ReadSync 고객'
             });
 
-            // 성공 시 처리
-            alert("결제가 완료되었습니다!");
-            // 여기서 주문 완료 페이지로 이동하거나 마이페이지 등으로 이동
-            navigate('/mypage/credits'); // 일단 마이페이지(혹은 포인트/주문내역)로 이동
-
         } catch (err: any) {
-            console.error("Payment failed:", err);
-            setError(err.response?.data?.message || "결제 처리 중 오류가 발생했습니다.");
+            if (err.code === 'USER_CANCEL') {
+                // 사용자가 결제를 취소한 경우
+                console.log('User cancelled payment');
+            } else {
+                console.error('Payment request failed:', err);
+                setError(err.message || '결제 요청 중 오류가 발생했습니다.');
+            }
         } finally {
             setIsProcessing(false);
         }
@@ -85,6 +258,40 @@ const CheckoutPage: React.FC = () => {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <Loader2 size={40} className="text-emerald-500 animate-spin" />
+            </div>
+        );
+    }
+
+    // 결제 완료 결과 표시
+    if (resultMessage) {
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
+                <Header />
+                <main className="pt-24 pb-16 px-4">
+                    <div className="max-w-2xl mx-auto">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`p-8 rounded-3xl text-center ${resultMessage.type === 'success'
+                                ? 'bg-emerald-50 border-2 border-emerald-200'
+                                : 'bg-red-50 border-2 border-red-200'
+                                }`}
+                        >
+                            {resultMessage.type === 'success' ? (
+                                <Check size={64} className="mx-auto text-emerald-500 mb-4" />
+                            ) : (
+                                <AlertCircle size={64} className="mx-auto text-red-500 mb-4" />
+                            )}
+                            <h1 className={`text-2xl font-bold mb-2 ${resultMessage.type === 'success' ? 'text-emerald-700' : 'text-red-700'
+                                }`}>
+                                {resultMessage.type === 'success' ? '결제 완료!' : '결제 실패'}
+                            </h1>
+                            <p className="text-gray-600">{resultMessage.message}</p>
+                            <p className="text-sm text-gray-500 mt-4">잠시 후 마이페이지로 이동합니다...</p>
+                        </motion.div>
+                    </div>
+                </main>
+                <Footer />
             </div>
         );
     }
@@ -121,32 +328,15 @@ const CheckoutPage: React.FC = () => {
                             </div>
                         )}
 
-                        {/* 결제 정보 */}
-                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-6">
-                            <h2 className="text-lg font-bold text-gray-900 mb-6">결제 수단</h2>
-
-                            {/* 결제 방법 선택 (임시) */}
-                            <div className="space-y-3">
-                                <label className="flex items-center gap-4 p-4 border-2 border-emerald-500 rounded-xl cursor-pointer bg-emerald-50">
-                                    <input type="radio" name="payment" checked readOnly className="w-5 h-5 text-emerald-500" />
-                                    <div className="flex-1">
-                                        <p className="font-bold text-gray-900">신용/체크카드 (테스트)</p>
-                                        <p className="text-sm text-gray-500">실제 결제되지 않는 테스트 모드입니다.</p>
-                                    </div>
-                                    <img src="https://static.toss.im/icons/png/4x/icon-toss-logo.png" alt="Toss" className="h-6 opacity-50" />
-                                </label>
-                            </div>
-                        </div>
-
                         {/* 주문 요약 */}
                         <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 mb-6">
                             <h2 className="text-lg font-bold text-gray-900 mb-4">주문 요약</h2>
 
-                            {/* 상품 리스트 간략 표시 */}
+                            {/* 상품 리스트 */}
                             <div className="mb-4 space-y-2 max-h-40 overflow-y-auto">
                                 {cartItems.map((item) => (
                                     <div key={item.cartId} className="flex justify-between text-sm text-gray-600">
-                                        <span className="truncate flex-1 pr-4">{item.bookTitle}</span>
+                                        <span className="truncate flex-1 pr-4">{item.title}</span>
                                         <span>x{item.quantity}</span>
                                     </div>
                                 ))}
@@ -170,6 +360,30 @@ const CheckoutPage: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* 결제 위젯 영역 */}
+                        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mb-6">
+                            <h2 className="text-lg font-bold text-gray-900 mb-4">결제 수단 선택</h2>
+
+                            {/* TossPayments 결제 위젯 컨테이너 */}
+                            <div
+                                id="payment-widget-container"
+                                className="bg-white rounded-xl min-h-[300px]"
+                            />
+
+                            {/* TossPayments 이용약관 컨테이너 */}
+                            <div
+                                id="agreement-container"
+                                className="bg-white rounded-xl mt-4"
+                            />
+
+                            {!isWidgetReady && !error && (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 size={24} className="text-emerald-500 animate-spin mr-2" />
+                                    <span className="text-gray-500">결제 위젯을 불러오는 중...</span>
+                                </div>
+                            )}
+                        </div>
+
                         {/* 보안 안내 */}
                         <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl mb-6">
                             <ShieldCheck className="text-emerald-600" />
@@ -181,8 +395,8 @@ const CheckoutPage: React.FC = () => {
                         {/* 결제 버튼 */}
                         <button
                             onClick={handlePayment}
-                            disabled={isProcessing}
-                            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                            disabled={isProcessing || !isWidgetReady}
+                            className="w-full py-4 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isProcessing ? (
                                 <>
