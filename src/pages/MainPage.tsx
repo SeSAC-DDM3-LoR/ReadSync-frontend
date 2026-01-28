@@ -162,13 +162,15 @@ const RecentBookCard: React.FC<{
   title: string;
   author: string;
   progress: number;
-}> = ({ index, title, author, progress }) => (
+  onClick: () => void;
+}> = ({ index, title, author, progress, onClick }) => (
   <motion.div
-    className="book-card"
+    className="book-card cursor-pointer"
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: index * 0.1 }}
     whileHover={{ scale: 1.03 }}
+    onClick={onClick}
   >
     <div className="book-card-cover relative">
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/20" />
@@ -499,6 +501,7 @@ const MainPage: React.FC = () => {
               </span>
             </h3>
             <motion.button
+              onClick={() => navigate('/library')}
               className="text-sm font-bold text-emerald-600 hover:text-emerald-800 flex items-center bg-white px-4 py-2 rounded-xl border border-emerald-100 shadow-sm transition-all hover:shadow-md"
               whileHover={{ x: 3 }}
             >
@@ -531,6 +534,7 @@ const MainPage: React.FC = () => {
                   title={lib.bookTitle}
                   author=""
                   progress={lib.totalProgress || 0}
+                  onClick={() => navigate(`/reader/${lib.libraryId}/1`)}
                 />
               ))
             ) : books.length > 0 ? (
@@ -542,6 +546,7 @@ const MainPage: React.FC = () => {
                   title={book.title}
                   author={book.author}
                   progress={0}
+                  onClick={() => navigate(`/books/${book.bookId}`)}
                 />
               ))
             ) : (

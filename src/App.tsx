@@ -18,15 +18,18 @@ import FriendsPage from './pages/FriendsPage';
 
 // 추가 페이지
 import ReaderPage from './pages/ReaderPage';
+import PersonalReaderPage from './pages/PersonalReaderPage';
 import CheckoutPage from './pages/CheckoutPage';
 import AiChatPage from './pages/AiChatPage';
 import TtsRoomPage from './pages/TtsRoomPage';
+import SubscriptionStorePage from './pages/SubscriptionStorePage';
 
 // 관리자 페이지
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminNoticesPage from './pages/admin/AdminNoticesPage';
+import AdminBooksPage from './pages/admin/AdminBooksPage';
 
 function App() {
   return (
@@ -48,11 +51,15 @@ function App() {
         <Route path="/library" element={<LibraryPage />} />
 
         {/* 뷰어 */}
-        <Route path="/reader/:libraryId/:chapterId" element={<ReaderPage />} />
+        <Route path="/reader/:libraryId/:chapterId" element={<PersonalReaderPage />} />
+        <Route path="/reader-simple/:libraryId/:chapterId" element={<ReaderPage />} />
 
         {/* 장바구니 & 결제 */}
         <Route path="/cart" element={<CartPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+
+        {/* 구독 상점 */}
+        <Route path="/subscription" element={<SubscriptionStorePage />} />
 
         {/* AI 기능 */}
         <Route path="/ai-chat" element={<AiChatPage />} />
@@ -79,6 +86,7 @@ function App() {
         <Route path="/admin" element={<AdminLoginPage />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/users" element={<AdminUsersPage />} />
+        <Route path="/admin/books" element={<AdminBooksPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
         <Route path="/admin/notices" element={<AdminNoticesPage />} />
       </Routes>

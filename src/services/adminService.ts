@@ -59,6 +59,46 @@ export interface Blacklist {
     active: boolean;
 }
 
+export interface AdminBook {
+    bookId: number;
+    title: string;
+    author: string;
+    publisher: string;
+    price: number;
+    rentalPrice: number;
+    coverUrl: string;
+    description: string;
+    categoryId: number;
+    categoryName?: string;
+    createdAt: string;
+}
+
+export interface BookRequest {
+    title: string;
+    author: string;
+    publisher?: string;
+    price: number;
+    rentalPrice?: number;
+    coverUrl?: string;
+    description?: string;
+    categoryId?: number;
+}
+
+export interface AdminChapter {
+    chapterId: number;
+    bookId: number;
+    chapterName: string;
+    sequence: number;
+    bookContentPath: string;
+    paragraphs: number;
+}
+
+export interface ChapterRequest {
+    bookId: number;
+    chapterName?: string;
+    sequence?: number;
+}
+
 // ==================== Admin User Service ====================
 
 export const adminUserService = {
@@ -147,4 +187,113 @@ export const blacklistService = {
     },
 };
 
+// ==================== Admin Book Service ====================
+
+export const adminBookService = {
+    // 도서 목록 조회
+    getAllBooks: async (page = 0, size = 20): Promise<PageResponse<AdminBook>> => {
+        const response = await api.get<PageResponse<AdminBook>>('/v1/books', {
+            params: { page, size },
+        });
+        return response.data;
+    },
+
+    // 도서 단건 조회
+    getBook: async (bookId: number): Promise<AdminBook> => {
+        const response = await api.get<AdminBook>(`/v1/books/${bookId}`);
+        return response.data;
+    },
+
+    // 도서 등록
+    createBook: async (request: BookRequest): Promise<number> => {
+        const response = await api.post<number>('/v1/books', request);
+        return response.data;
+    },
+
+    // 도서 수정
+    updateBook: async (bookId: number, request: BookRequest): Promise<string> => {
+        const response = await api.put<string>(`/v1/books/${bookId}`, request);
+        return response.data;
+    },
+
+    // 도서 삭제
+    deleteBook: async (bookId: number): Promise<void> => {
+        await api.delete(`/v1/books/${bookId}`);
+    },
+
+    // 도서 검색
+    searchBooks: async (keyword: string, page = 0, size = 20): Promise<PageResponse<AdminBook>> => {
+        const response = await api.get<PageResponse<AdminBook>>('/v1/books/search', {
+            params: { keyword, page, size },
+        });
+        return response.data;
+    },
+};
+
+// ==================== Admin Chapter Service ====================
+
+export const adminChapterService = {
+    // 책의 챕터 목록 조회
+    getChaptersByBook: async (bookId: number): Promise<AdminChapter[]> => {
+        const response = await api.get<AdminChapter[]>(`/v1/chapters/book/${bookId}`);
+        return response.data;
+    },
+
+    // 챕터 단건 조회
+    getChapter: async (chapterId: number): Promise<AdminChapter> => {
+        const response = await api.get<AdminChapter>(`/v1/chapters/${chapterId}`);
+        return response.data;
+    },
+
+    // 챕터 등록 (파일 업로드)
+    createChapter: async (file: File, bookId: number, chapterName?: string, sequence?: number): Promise<AdminChapter> => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('bookId', bookId.toString());
+        if (chapterName) formData.append('chapterName', chapterName);
+        if (sequence !== undefined) formData.append('sequence', sequence.toString());
+
+        const response = await api.post<AdminChapter>('/v1/chapters', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    // 챕터 등록 (URL)
+    createChapterByUrl: async (bookId: number, chapterName: string, sequence: number, contentPath: string): Promise<AdminChapter> => {
+        const response = await api.post<AdminChapter>('/v1/chapters/url', {
+            bookId,
+            chapterName,
+            sequence,
+            contentPath,
+        });
+        return response.data;
+    },
+
+    // 챕터 수정
+    updateChapter: async (chapterId: number, file?: File, chapterName?: string, sequence?: number): Promise<AdminChapter> => {
+        const formData = new FormData();
+        if (file) formData.append('file', file);
+        if (chapterName) formData.append('chapterName', chapterName);
+        if (sequence !== undefined) formData.append('sequence', sequence.toString());
+
+        const response = await api.put<AdminChapter>(`/v1/chapters/${chapterId}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        return response.data;
+    },
+
+    // 챕터 삭제
+    deleteChapter: async (chapterId: number): Promise<void> => {
+        await api.delete(`/v1/chapters/${chapterId}`);
+    },
+
+    // 전체 챕터 조회
+    getAllChapters: async (): Promise<AdminChapter[]> => {
+        const response = await api.get<AdminChapter[]>('/v1/chapters');
+        return response.data;
+    },
+};
+
 export default adminUserService;
+
