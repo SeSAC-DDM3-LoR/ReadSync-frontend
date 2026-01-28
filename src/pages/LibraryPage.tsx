@@ -8,6 +8,7 @@ import {
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { libraryService } from '../services/libraryService';
+import { chapterService } from '../services/readerService';
 import useAuthStore from '../stores/authStore';
 import type { Library as LibraryType } from '../services/libraryService';
 
@@ -126,6 +127,52 @@ const LibraryPage: React.FC = () => {
 
 // 서재 카드 컴포넌트
 const LibraryCard: React.FC<{ book: LibraryType; index: number }> = ({ book, index }) => {
+    const navigate = useNavigate();
+    const [firstChapterId, setFirstChapterId] = useState<number | null>(null);
+    const [isLoadingChapter, setIsLoadingChapter] = useState(false);
+
+    // 책의 첫 번째 챕터 ID 조회
+    useEffect(() => {
+        const loadFirstChapter = async () => {
+            try {
+                const chapters = await chapterService.getChaptersByBook(book.bookId);
+                if (chapters.length > 0) {
+                    // sequence 순으로 정렬하여 첫 번째 챕터 선택
+                    const sortedChapters = chapters.sort((a, b) => a.sequence - b.sequence);
+                    setFirstChapterId(sortedChapters[0].chapterId);
+                }
+            } catch (error) {
+                console.error('챕터 목록 로드 실패:', error);
+            }
+        };
+
+        loadFirstChapter();
+    }, [book.bookId]);
+
+    // 읽기 버튼 클릭 핸들러
+    const handleReadClick = async () => {
+        if (firstChapterId) {
+            navigate(`/reader/${book.libraryId}/${firstChapterId}`);
+        } else {
+            // 챕터가 없으면 책 정보 기반으로 제 조회 시도
+            setIsLoadingChapter(true);
+            try {
+                const chapters = await chapterService.getChaptersByBook(book.bookId);
+                if (chapters.length > 0) {
+                    const sortedChapters = chapters.sort((a, b) => a.sequence - b.sequence);
+                    navigate(`/reader/${book.libraryId}/${sortedChapters[0].chapterId}`);
+                } else {
+                    alert('이 책에 챕터가 없습니다.');
+                }
+            } catch (error) {
+                console.error('챕터 로드 실패:', error);
+                alert('챕터를 불러오는데 실패했습니다.');
+            } finally {
+                setIsLoadingChapter(false);
+            }
+        }
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -189,12 +236,17 @@ const LibraryCard: React.FC<{ book: LibraryType; index: number }> = ({ book, ind
             </div>
 
             {/* 읽기 버튼 */}
-            <Link
-                to={`/reader/${book.libraryId}/1`}
-                className="mt-4 w-full py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl text-center block hover:shadow-lg transition-shadow"
+            <button
+                onClick={handleReadClick}
+                disabled={isLoadingChapter}
+                className="mt-4 w-full py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl text-center block hover:shadow-lg transition-shadow disabled:opacity-50"
             >
-                읽기 계속하기
-            </Link>
+                {isLoadingChapter ? (
+                    <Loader2 size={20} className="animate-spin mx-auto" />
+                ) : (
+                    '읽기 계속하기'
+                )}
+            </button>
         </motion.div>
     );
 };
