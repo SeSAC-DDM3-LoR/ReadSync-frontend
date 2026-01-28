@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     BookOpen, Loader2, ChevronRight, Library, BookMarked,
-    Clock, CheckCircle, AlertCircle
+    Clock
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -45,22 +45,6 @@ const LibraryPage: React.FC = () => {
         return true;
     });
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'READING': return 'bg-blue-100 text-blue-700';
-            case 'COMPLETED': return 'bg-green-100 text-green-700';
-            default: return 'bg-gray-100 text-gray-600';
-        }
-    };
-
-    const getStatusLabel = (status: string) => {
-        switch (status) {
-            case 'READING': return '읽는 중';
-            case 'COMPLETED': return '완독';
-            default: return '읽기 전';
-        }
-    };
-
     return (
         <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
             <Header />
@@ -96,8 +80,8 @@ const LibraryPage: React.FC = () => {
                                 key={f}
                                 onClick={() => setFilter(f)}
                                 className={`px-4 py-2 rounded-xl font-medium transition-colors ${filter === f
-                                        ? 'bg-emerald-500 text-white'
-                                        : 'bg-white text-gray-600 hover:bg-emerald-50'
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-white text-gray-600 hover:bg-emerald-50'
                                     }`}
                             >
                                 {f === 'all' && '전체'}
@@ -151,8 +135,14 @@ const LibraryCard: React.FC<{ book: LibraryType; index: number }> = ({ book, ind
         >
             <div className="flex gap-4">
                 {/* 표지 */}
-                <div className="w-20 h-28 bg-gradient-to-br from-emerald-100 to-green-50 rounded-xl flex-shrink-0 flex items-center justify-center">
-                    <BookOpen size={32} className="text-emerald-300" />
+                <div className="w-20 h-28 bg-gradient-to-br from-emerald-100 to-green-50 rounded-xl flex-shrink-0 overflow-hidden">
+                    {book.coverUrl ? (
+                        <img src={book.coverUrl} alt={book.bookTitle} className="w-full h-full object-cover" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <BookOpen size={32} className="text-emerald-300" />
+                        </div>
+                    )}
                 </div>
 
                 {/* 정보 */}
@@ -162,8 +152,8 @@ const LibraryCard: React.FC<{ book: LibraryType; index: number }> = ({ book, ind
                     {/* 상태 배지 */}
                     <div className="flex items-center gap-2 mb-3">
                         <span className={`text-xs px-2 py-1 rounded-lg font-medium ${book.readingStatus === 'READING' ? 'bg-blue-100 text-blue-700' :
-                                book.readingStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                    'bg-gray-100 text-gray-600'
+                            book.readingStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                                'bg-gray-100 text-gray-600'
                             }`}>
                             {book.readingStatus === 'READING' ? '읽는 중' :
                                 book.readingStatus === 'COMPLETED' ? '완독' : '읽기 전'}

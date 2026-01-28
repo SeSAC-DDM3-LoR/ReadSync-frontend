@@ -8,15 +8,15 @@ export interface Library {
     userId: number;
     bookId: number;
     bookTitle: string;
+    coverUrl?: string; // 책 표지 URL (선택적)
     ownershipType: 'OWNED' | 'RENTED';
-    totalProgress: number;
+    totalProgress: number; // BigDecimal은 number로 변환됨
     readingStatus: 'BEFORE_READING' | 'READING' | 'COMPLETED';
     expiresAt: string | null;
     createdAt: string;
 }
 
 export interface LibraryRequest {
-    userId?: number;
     bookId: number;
     ownershipType: 'OWNED' | 'RENTED';
     rentalDays?: number;
@@ -66,9 +66,9 @@ export const libraryService = {
         return response.data;
     },
 
-    // 서재에 도서 추가
+    // 서재에 도서 추가 (내 서재)
     addToLibrary: async (request: LibraryRequest): Promise<number> => {
-        const response = await api.post<number>('/v1/my-library', request);
+        const response = await api.post<number>('/v1/my-library/me', request);
         return response.data;
     },
 

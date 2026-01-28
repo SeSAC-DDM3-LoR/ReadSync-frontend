@@ -4,12 +4,12 @@ import { motion } from 'framer-motion';
 import {
     BookOpen, Star, ShoppingCart, Heart, Share2, ArrowLeft,
     Clock, User, Calendar, Globe, Loader2, ChevronRight, AlertCircle,
-    ThumbsUp, ThumbsDown, Plus, Crown, Check, Package
+    ThumbsUp, ThumbsDown, Plus, Crown, Check, Package, BookMarked
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { bookService } from '../services/bookService';
-import { chapterService } from '../services/libraryService';
+import { chapterService, libraryService } from '../services/libraryService';
 import { reviewService } from '../services/reviewService';
 import { cartService } from '../services/cartService';
 import useAuthStore from '../stores/authStore';
@@ -34,6 +34,9 @@ const BookDetailPage: React.FC = () => {
     const [isLoadingPurchased, setIsLoadingPurchased] = useState(true);
     const [cartBookIds, setCartBookIds] = useState<Set<number>>(new Set());
     const [isLoadingCart, setIsLoadingCart] = useState(true);
+    const [libraryBookIds, setLibraryBookIds] = useState<Set<number>>(new Set());
+    const [isLoadingLibrary, setIsLoadingLibrary] = useState(true);
+    const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
 
     // 프로필 팝업 상태
     const [profilePopup, setProfilePopup] = useState<{ isOpen: boolean; userId: number; position?: { x: number; y: number } }>({
@@ -58,8 +61,22 @@ const BookDetailPage: React.FC = () => {
         if (isAuthenticated) {
             loadPurchasedBooks();
             loadCartItems();
+            loadLibraryBooks();
         }
     }, [id, isAuthenticated]);
+
+    const loadLibraryBooks = async () => {
+        setIsLoadingLibrary(true);
+        try {
+            const response = await libraryService.getMyLibrary(0, 100);
+            const libraryIds = new Set(response.content.map(item => item.bookId));
+            setLibraryBookIds(libraryIds);
+        } catch (err) {
+            console.error('Failed to load library books:', err);
+        } finally {
+            setIsLoadingLibrary(false);
+        }
+    };
 
     const loadCartItems = async () => {
         setIsLoadingCart(true);
@@ -136,6 +153,36 @@ const BookDetailPage: React.FC = () => {
             }
         } finally {
             setIsAddingToCart(false);
+        }
+    };
+
+    const handleAddToLibrary = async () => {
+        if (!isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+        if (!book) return;
+
+        // 이미 서재에 있는 경우 방지
+        if (libraryBookIds.has(book.bookId)) {
+            alert('이미 내 서재에 있는 책입니다.');
+            return;
+        }
+
+        setIsAddingToLibrary(true);
+        try {
+            await libraryService.addToLibrary({
+                bookId: book.bookId,
+                ownershipType: 'OWNED'
+            });
+            // 서재에 추가 성공 시 상태 업데이트
+            setLibraryBookIds(prev => new Set(prev).add(book.bookId));
+            alert('내 서재에 추가되었습니다!');
+        } catch (error: any) {
+            console.error('Failed to add to library:', error);
+            alert('서재 추가에 실패했습니다.');
+        } finally {
+            setIsAddingToLibrary(false);
         }
     };
 
@@ -250,7 +297,7 @@ const BookDetailPage: React.FC = () => {
 
                             {/* 액션 버튼 */}
                             <div className="flex flex-wrap gap-3 mb-8">
-                                {isLoadingPurchased || isLoadingCart ? (
+                                {isLoadingPurchased || isLoadingCart || isLoadingLibrary ? (
                                     <button
                                         disabled
                                         className="flex items-center gap-2 px-6 py-3 bg-gray-300 text-white font-bold rounded-xl opacity-50"
@@ -258,15 +305,67 @@ const BookDetailPage: React.FC = () => {
                                         <Loader2 size={20} className="animate-spin" />
                                         확인 중...
                                     </button>
+                                ) : book.viewPermission === 'FREE' ? (
+                                    // FREE 책: 서재 추가 버튼만 표시
+                                    <>
+                                        {libraryBookIds.has(book.bookId) ? (
+                                            <button
+                                                onClick={() => navigate('/library')}
+                                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-200 hover:shadow-purple-300 transition-all"
+                                            >
+                                                <BookMarked size={20} />
+                                                내 서재에서 보기
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleAddToLibrary}
+                                                disabled={isAddingToLibrary}
+                                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-200 hover:shadow-purple-300 transition-all disabled:opacity-50"
+                                            >
+                                                {isAddingToLibrary ? (
+                                                    <Loader2 size={20} className="animate-spin" />
+                                                ) : (
+                                                    <BookMarked size={20} />
+                                                )}
+                                                내 서재에 추가하기
+                                            </button>
+                                        )}
+                                    </>
                                 ) : purchasedBookIds.has(book.bookId) ? (
-                                    <button
-                                        disabled
-                                        className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg cursor-not-allowed"
-                                    >
-                                        <Check size={20} />
-                                        구매 완료
-                                    </button>
+                                    // PREMIUM 구매 완료: 구매 완료 + 서재 추가 버튼
+                                    <>
+                                        <button
+                                            disabled
+                                            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg cursor-not-allowed"
+                                        >
+                                            <Check size={20} />
+                                            구매 완료
+                                        </button>
+                                        {libraryBookIds.has(book.bookId) ? (
+                                            <button
+                                                onClick={() => navigate('/library')}
+                                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-200 hover:shadow-purple-300 transition-all"
+                                            >
+                                                <BookMarked size={20} />
+                                                내 서재에서 보기
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={handleAddToLibrary}
+                                                disabled={isAddingToLibrary}
+                                                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-purple-200 hover:shadow-purple-300 transition-all disabled:opacity-50"
+                                            >
+                                                {isAddingToLibrary ? (
+                                                    <Loader2 size={20} className="animate-spin" />
+                                                ) : (
+                                                    <BookMarked size={20} />
+                                                )}
+                                                내 서재에 추가하기
+                                            </button>
+                                        )}
+                                    </>
                                 ) : cartBookIds.has(book.bookId) ? (
+                                    // PREMIUM 미구매 + 장바구니에 있음
                                     <button
                                         onClick={() => navigate('/cart')}
                                         className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-bold rounded-xl shadow-lg shadow-amber-200 hover:shadow-amber-300 transition-all"
@@ -275,6 +374,7 @@ const BookDetailPage: React.FC = () => {
                                         장바구니로 가기
                                     </button>
                                 ) : (
+                                    // PREMIUM 미구매 + 장바구니에 없음
                                     <button
                                         onClick={handleAddToCart}
                                         disabled={isAddingToCart}
