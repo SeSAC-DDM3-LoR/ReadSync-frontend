@@ -1,196 +1,281 @@
-import { useState } from 'react';
-import { Sprout, BookOpen, MessageCircle, LogIn, LogOut, Menu, X, User, Library, ShoppingCart } from 'lucide-react';
-import { Button } from '../ui/Button';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { cn } from '../ui/Card';
-import { useAuth } from '../../contexts/AuthContext';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BookOpen, User, Menu, Search, X, ShoppingCart, Bell, LogOut, Settings, ChevronDown } from 'lucide-react';
+import useAuthStore from '../../stores/authStore';
 
-export function Header() {
-    const navigate = useNavigate();
-    const location = useLocation();
-    const { user, isAuthenticated, logout } = useAuth();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+const Header: React.FC = () => {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuthStore();
 
-    const navItems = [
-        { label: '도서', path: '/books', icon: ShoppingCart },
-        { label: '서재', path: '/library', icon: Library },
-        { label: '커뮤니티', path: '/community', icon: MessageCircle },
-    ];
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
 
-    const handleLogout = async () => {
-        await logout();
-        setIsUserMenuOpen(false);
-        navigate('/');
-    };
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/books?search=${encodeURIComponent(searchQuery)}`);
+      setIsSearchOpen(false);
+      setSearchQuery('');
+    }
+  };
 
+  const handleLogout = async () => {
+    await logout();
+    setIsProfileDropdownOpen(false);
+    navigate('/');
+  };
+
+  // 프로필 이미지 또는 기본 아바타
+  const renderProfileImage = () => {
+    if (user?.profileImage) {
+      return (
+        <img
+          src={user.profileImage}
+          alt={user.nickname || 'Profile'}
+          className="w-9 h-9 rounded-full object-cover border-2 border-emerald-200"
+        />
+      );
+    }
+    // 기본 아바타 (닉네임 첫 글자)
+    const initial = user?.nickname?.charAt(0) || '?';
     return (
-        <header className="fixed top-0 left-0 right-0 h-16 bg-white/90 backdrop-blur-md border-b border-forest-100 z-50 transition-all duration-300">
-            <div className="max-w-[1920px] mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
-
-                {/* Logo Area */}
-                <div
-                    className="flex items-center gap-3 cursor-pointer group"
-                    onClick={() => navigate('/')}
-                >
-                    <div className="p-2 bg-gradient-to-br from-forest-500 to-forest-600 rounded-xl text-white shadow-md group-hover:shadow-lg transition-all duration-300 transform group-hover:scale-105">
-                        <Sprout className="w-5 h-5" fill="currentColor" />
-                    </div>
-                    <span className="font-serif font-bold text-xl text-forest-900 tracking-tight group-hover:text-forest-700 transition-colors">
-                        ReadSync
-                    </span>
-                </div>
-
-                {/* Desktop Navigation */}
-                <nav className="hidden md:flex items-center gap-1">
-                    {navItems.map((item) => {
-                        const isActive = location.pathname === item.path || location.pathname.startsWith(item.path + '/');
-                        const Icon = item.icon;
-
-                        return (
-                            <Button
-                                key={item.label}
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => navigate(item.path)}
-                                className={cn(
-                                    "gap-2 font-medium transition-all duration-200 rounded-full px-4 border border-transparent",
-                                    isActive
-                                        ? "bg-forest-50 text-forest-700 border-forest-100 shadow-sm"
-                                        : "text-slate-600 hover:text-forest-700 hover:bg-forest-50/50"
-                                )}
-                            >
-                                <Icon className={cn("w-4 h-4", isActive ? "fill-forest-200" : "")} />
-                                {item.label}
-                            </Button>
-                        );
-                    })}
-                </nav>
-
-                {/* Auth Buttons */}
-                <div className="hidden md:flex items-center gap-3">
-                    {isAuthenticated && user ? (
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                                className="flex items-center gap-3 px-3 py-1.5 rounded-full hover:bg-forest-50 transition-colors"
-                            >
-                                <div className="w-8 h-8 bg-gradient-to-br from-forest-400 to-forest-600 rounded-full flex items-center justify-center text-white shadow-md">
-                                    {user.profileImage ? (
-                                        <img src={user.profileImage} alt="" className="w-full h-full rounded-full object-cover" />
-                                    ) : (
-                                        <User className="w-4 h-4" />
-                                    )}
-                                </div>
-                                <div className="text-left">
-                                    <p className="text-sm font-medium text-forest-900">{user.userName}</p>
-                                    <p className="text-xs text-forest-500">Lv.{user.level}</p>
-                                </div>
-                            </button>
-
-                            {/* Dropdown */}
-                            {isUserMenuOpen && (
-                                <div className="absolute top-full right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-forest-100 py-2">
-                                    <button
-                                        onClick={() => { navigate('/mypage'); setIsUserMenuOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-forest-700 hover:bg-forest-50 transition-colors"
-                                    >
-                                        <User className="w-4 h-4" />
-                                        마이페이지
-                                    </button>
-                                    <button
-                                        onClick={() => { navigate('/library'); setIsUserMenuOpen(false); }}
-                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-forest-700 hover:bg-forest-50 transition-colors"
-                                    >
-                                        <BookOpen className="w-4 h-4" />
-                                        내 서재
-                                    </button>
-                                    <div className="h-px bg-forest-100 my-2" />
-                                    <button
-                                        onClick={handleLogout}
-                                        className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                    >
-                                        <LogOut className="w-4 h-4" />
-                                        로그아웃
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => navigate('/login')}
-                            className="rounded-full px-5 shadow-md hover:shadow-lg hover:shadow-forest-500/20 transition-all"
-                        >
-                            <LogIn className="w-4 h-4 mr-2" />
-                            로그인
-                        </Button>
-                    )}
-                </div>
-
-                {/* Mobile Menu Toggle */}
-                <button
-                    className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                >
-                    {isMobileMenuOpen ? <X /> : <Menu />}
-                </button>
-            </div>
-
-            {/* Mobile Menu Dropdown */}
-            {isMobileMenuOpen && (
-                <div className="md:hidden absolute top-16 left-0 right-0 bg-white border-b border-slate-100 shadow-xl p-4 flex flex-col gap-4">
-                    <nav className="flex flex-col gap-2">
-                        {navItems.map((item) => (
-                            <Button
-                                key={item.label}
-                                variant="ghost"
-                                className="justify-start w-full text-lg h-12"
-                                onClick={() => {
-                                    navigate(item.path);
-                                    setIsMobileMenuOpen(false);
-                                }}
-                            >
-                                <item.icon className="w-5 h-5 mr-3" />
-                                {item.label}
-                            </Button>
-                        ))}
-                    </nav>
-                    <div className="border-t border-slate-100 pt-4 flex flex-col gap-2">
-                        {isAuthenticated ? (
-                            <>
-                                <div className="flex items-center gap-3 px-4 py-2">
-                                    <div className="w-10 h-10 bg-gradient-to-br from-forest-400 to-forest-600 rounded-full flex items-center justify-center text-white">
-                                        <User className="w-5 h-5" />
-                                    </div>
-                                    <div>
-                                        <p className="font-medium text-forest-900">{user?.userName}</p>
-                                        <p className="text-sm text-forest-500">Lv.{user?.level}</p>
-                                    </div>
-                                </div>
-                                <Button variant="outline" className="justify-center w-full" onClick={handleLogout}>
-                                    <LogOut className="w-4 h-4 mr-2" />
-                                    로그아웃
-                                </Button>
-                            </>
-                        ) : (
-                            <Button variant="primary" className="justify-center w-full" onClick={() => { navigate('/login'); setIsMobileMenuOpen(false); }}>
-                                <LogIn className="w-4 h-4 mr-2" />
-                                로그인 / 회원가입
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Backdrop for user menu */}
-            {isUserMenuOpen && (
-                <div
-                    className="fixed inset-0 z-40"
-                    onClick={() => setIsUserMenuOpen(false)}
-                />
-            )}
-        </header>
+      <div className="w-9 h-9 rounded-full bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center text-white font-bold border-2 border-emerald-200">
+        {initial}
+      </div>
     );
-}
+  };
+
+  return (
+    <header className="fixed top-0 left-0 w-full z-50 bg-white/90 backdrop-blur-md shadow-sm border-b border-emerald-100/50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-16">
+
+          {/* 로고 영역 */}
+          <Link to="/" className="flex items-center gap-2 cursor-pointer group">
+            <div className="w-9 h-9 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200 group-hover:shadow-emerald-300 transition-shadow">
+              <BookOpen size={20} />
+            </div>
+            <span className="font-extrabold text-xl bg-gradient-to-r from-emerald-700 to-green-600 bg-clip-text text-transparent">
+              ReadSync
+            </span>
+          </Link>
+
+          {/* 검색창 (데스크탑) */}
+          <div className="hidden md:flex flex-1 max-w-md mx-8">
+            <form onSubmit={handleSearch} className="w-full relative">
+              <input
+                type="text"
+                placeholder="책 제목, 저자로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-emerald-50/80 border border-emerald-100 
+                           focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200 
+                           outline-none transition-all text-gray-700 placeholder-gray-400"
+              />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </form>
+          </div>
+
+          {/* 데스크탑 메뉴 */}
+          <nav className="hidden lg:flex items-center space-x-6">
+            <Link to="/library" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+              내 서재
+            </Link>
+            <Link to="/ai-chat" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+              AI 채팅
+            </Link>
+            <Link to="/community" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+              커뮤니티
+            </Link>
+            <Link to="/subscription" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+              구독상점
+            </Link>
+          </nav>
+
+          {/* 우측 아이콘 */}
+          <div className="flex items-center gap-2">
+            {/* 모바일 검색 버튼 */}
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="md:hidden p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors"
+            >
+              <Search size={20} />
+            </button>
+
+            {/* 알림 */}
+            <button className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">
+              <Bell size={20} />
+              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+            </button>
+
+            {/* 장바구니 */}
+            <Link to="/cart" className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">
+              <ShoppingCart size={20} />
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                3
+              </span>
+            </Link>
+
+            {/* 로그인 상태에 따른 UI */}
+            {isAuthenticated && user ? (
+              // 로그인된 경우: 프로필 드롭다운
+              <div className="relative">
+                <button
+                  onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                  className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-emerald-50 transition-colors"
+                >
+                  {renderProfileImage()}
+                  <div className="hidden sm:block text-left">
+                    <p className="text-sm font-bold text-gray-800 leading-tight">
+                      {user.nickname}
+                      <span className="text-gray-400 font-normal">#{user.tag}</span>
+                    </p>
+                  </div>
+                  <ChevronDown size={16} className="text-gray-400 hidden sm:block" />
+                </button>
+
+                {/* 프로필 드롭다운 */}
+                {isProfileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50">
+                    <div className="px-4 py-3 border-b border-gray-100">
+                      <p className="font-bold text-gray-800">
+                        {user.nickname}
+                        <span className="text-gray-400 font-normal">#{user.tag}</span>
+                      </p>
+                      <p className="text-xs text-gray-500">Lv.{user.levelId} · {user.experience} EXP</p>
+                    </div>
+
+                    <Link
+                      to="/mypage"
+                      onClick={() => setIsProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-emerald-50 transition-colors"
+                    >
+                      <User size={18} className="text-gray-500" />
+                      마이페이지
+                    </Link>
+                    <Link
+                      to="/settings"
+                      onClick={() => setIsProfileDropdownOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-emerald-50 transition-colors"
+                    >
+                      <Settings size={18} className="text-gray-500" />
+                      설정
+                    </Link>
+
+                    {/* 관리자 전용 */}
+                    {(user.role === 'ADMIN' || user.role === 'ROLE_ADMIN') && (
+                      <Link
+                        to="/admin/dashboard"
+                        onClick={() => setIsProfileDropdownOpen(false)}
+                        className="flex items-center gap-3 px-4 py-2.5 text-emerald-700 hover:bg-emerald-50 transition-colors font-medium"
+                      >
+                        <Settings size={18} className="text-emerald-600" />
+                        관리자 대시보드
+                      </Link>
+                    )}
+
+                    <div className="border-t border-gray-100 mt-1 pt-1">
+                      <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-3 px-4 py-2.5 text-red-600 hover:bg-red-50 transition-colors w-full"
+                      >
+                        <LogOut size={18} />
+                        로그아웃
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // 비로그인: 로그인 버튼
+              <Link
+                to="/login"
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl hover:shadow-lg hover:shadow-emerald-200 transition-all"
+              >
+                <User size={18} />
+                <span>로그인</span>
+              </Link>
+            )}
+
+            {/* 모바일 메뉴 버튼 */}
+            <button
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="lg:hidden p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors"
+            >
+              <Menu size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* 모바일 검색창 */}
+        {isSearchOpen && (
+          <div className="md:hidden py-3 border-t border-emerald-100">
+            <form onSubmit={handleSearch} className="relative">
+              <input
+                type="text"
+                placeholder="책 제목, 저자로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+                className="w-full pl-11 pr-4 py-3 rounded-xl bg-emerald-50/80 border border-emerald-100 
+                           focus:bg-white focus:border-emerald-300 focus:ring-2 focus:ring-emerald-200 
+                           outline-none transition-all text-gray-700 placeholder-gray-400"
+              />
+              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" />
+            </form>
+          </div>
+        )}
+
+        {/* 모바일 메뉴 */}
+        {isMobileMenuOpen && (
+          <div className="lg:hidden py-4 border-t border-emerald-100">
+            <nav className="flex flex-col space-y-2">
+              <Link to="/library" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+                내 서재
+              </Link>
+              <Link to="/ai-chat" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+                AI 채팅
+              </Link>
+              <Link to="/community" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+                커뮤니티
+              </Link>
+              <Link to="/subscription" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+                구독상점
+              </Link>
+
+              {!isAuthenticated && (
+                <Link
+                  to="/login"
+                  className="mx-4 mt-2 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl text-center"
+                >
+                  로그인
+                </Link>
+              )}
+            </nav>
+          </div>
+        )}
+      </div>
+
+      {/* 드롭다운 외부 클릭 시 닫기 */}
+      {isProfileDropdownOpen && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setIsProfileDropdownOpen(false)}
+        />
+      )}
+    </header>
+  );
+};
+
+export default Header;

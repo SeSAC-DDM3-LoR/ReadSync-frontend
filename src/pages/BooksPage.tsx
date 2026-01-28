@@ -1,134 +1,251 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { api, type Book } from '../lib/api';
-import { Search, BookOpen } from 'lucide-react';
-import { Card } from '../components/ui/Card';
-import { Button } from '../components/ui/Button';
+import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { Search, Filter, BookOpen, Star, ChevronLeft, ChevronRight, Loader2, Crown } from 'lucide-react';
+import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
+import { bookService, categoryService } from '../services/bookService';
+import type { Book, Category, PageResponse } from '../services/bookService';
 
-// Mock Data for fallback if backend is empty
-const MOCK_BOOKS: Book[] = [
-    { bookId: 1, title: "데이터베이스", author: "강작가", categoryId: 1, coverUrl: "", price: 25000, summary: "SQL 기초", isAdultOnly: false, language: "KOREAN", viewPermission: 'FREE' },
-    { bookId: 2, title: "자바", author: "이코딩", categoryId: 2, coverUrl: "", price: 32000, summary: "Java 마스터", isAdultOnly: false, language: "KOREAN", viewPermission: 'FREE' },
-    { bookId: 3, title: "AI와 미래", author: "박지능", categoryId: 3, coverUrl: "", price: 18000, summary: "인공지능 개론", isAdultOnly: false, language: "KOREAN", viewPermission: 'FREE' },
-];
+const BooksPage: React.FC = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [books, setBooks] = useState<Book[]>([]);
+    const [categories, setCategories] = useState<Category[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [totalPages, setTotalPages] = useState(0);
 
-export function BooksPage() {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
+    const currentPage = parseInt(searchParams.get('page') || '1') - 1;
+    const searchQuery = searchParams.get('search') || '';
+    const selectedCategory = searchParams.get('category') || '';
 
-    const { data: books, isLoading } = useQuery<Book[]>({
-        queryKey: ['books'],
-        queryFn: async () => {
-            try {
-                const res = await api.get('/books');
-                return res.data;
-            } catch (e) {
-                console.warn(e, "Backend unavailable, using mock data");
-                return MOCK_BOOKS;
+    useEffect(() => {
+        loadData();
+    }, [currentPage, searchQuery]);
+
+    useEffect(() => {
+        loadCategories();
+    }, []);
+
+    const loadData = async () => {
+        setIsLoading(true);
+        try {
+            let response: PageResponse<Book>;
+            if (searchQuery) {
+                response = await bookService.searchBooks(searchQuery, currentPage, 12);
+            } else {
+                response = await bookService.getBooks(currentPage, 12);
             }
+            setBooks(response.content);
+            setTotalPages(response.totalPages);
+        } catch (error) {
+            console.error('Failed to load books:', error);
+        } finally {
+            setIsLoading(false);
         }
-    });
+    };
 
-    const categories = [
-        { id: 1, name: '소설' },
-        { id: 2, name: 'IT/과학' },
-        { id: 3, name: '인문' }
-    ];
+    const loadCategories = async () => {
+        try {
+            const response = await categoryService.getCategories(0, 50);
+            setCategories(response.content);
+        } catch (error) {
+            console.error('Failed to load categories:', error);
+        }
+    };
 
-    const filteredBooks = books?.filter(book => {
-        const matchesSearch = book.title.includes(searchTerm) || book.author.includes(searchTerm);
-        const matchesCategory = selectedCategory ? book.categoryId === selectedCategory : true;
-        return matchesSearch && matchesCategory;
-    });
+    const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        const formData = new FormData(e.currentTarget);
+        const query = formData.get('search') as string;
+        setSearchParams({ search: query, page: '1' });
+    };
+
+    const handlePageChange = (page: number) => {
+        const params = new URLSearchParams(searchParams);
+        params.set('page', String(page + 1));
+        setSearchParams(params);
+    };
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
+            <Header />
 
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-serif text-forest-900 mb-2">서점 (Book Store)</h1>
-                    <p className="text-forest-600">지식의 숲에서 새로운 모험을 찾아보세요.</p>
-                </div>
+            <main className="pt-24 pb-16 px-4">
+                <div className="max-w-7xl mx-auto">
+                    {/* 페이지 헤더 */}
+                    <div className="text-center mb-12">
+                        <motion.h1
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-4xl font-extrabold text-gray-900 mb-4"
+                        >
+                            📚 도서 목록
+                        </motion.h1>
+                        <p className="text-gray-600">다양한 장르의 책을 만나보세요</p>
+                    </div>
 
-                {/* Search Bar */}
-                <div className="relative w-full md:w-96">
-                    <input
-                        type="text"
-                        placeholder="도서 제목, 작가 검색..."
-                        className="w-full pl-10 pr-4 py-2.5 rounded-full border border-forest-200 focus:outline-none focus:border-forest-500 focus:ring-1 focus:ring-forest-500 bg-white shadow-sm transition-all"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-forest-400" />
-                </div>
-            </div>
+                    {/* 검색 및 필터 */}
+                    <div className="flex flex-col md:flex-row gap-4 mb-8">
+                        <form onSubmit={handleSearch} className="flex-1">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    name="search"
+                                    defaultValue={searchQuery}
+                                    placeholder="책 제목, 저자로 검색..."
+                                    className="w-full pl-12 pr-4 py-4 rounded-2xl bg-white border-2 border-emerald-100 
+                             focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 
+                             outline-none transition-all text-gray-700 shadow-sm"
+                                />
+                                <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500" />
+                                <button
+                                    type="submit"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-colors"
+                                >
+                                    검색
+                                </button>
+                            </div>
+                        </form>
 
-            {/* Category Filter */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                <Button
-                    variant={selectedCategory === null ? 'primary' : 'outline'}
-                    size="sm"
-                    onClick={() => setSelectedCategory(null)}
-                    className="rounded-full"
-                >
-                    전체
-                </Button>
-                {categories.map(cat => (
-                    <Button
-                        key={cat.id}
-                        variant={selectedCategory === cat.id ? 'primary' : 'outline'}
-                        size="sm"
-                        onClick={() => setSelectedCategory(cat.id)}
-                        className="rounded-full"
-                    >
-                        {cat.name}
-                    </Button>
-                ))}
-            </div>
+                        <div className="flex gap-2">
+                            <select
+                                value={selectedCategory}
+                                onChange={(e) => setSearchParams({ category: e.target.value, page: '1' })}
+                                className="px-4 py-4 rounded-2xl bg-white border-2 border-emerald-100 outline-none font-medium text-gray-700"
+                            >
+                                <option value="">전체 카테고리</option>
+                                {categories.map((cat) => (
+                                    <option key={cat.categoryId} value={String(cat.categoryId)}>
+                                        {cat.categoryName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
 
-            {/* Book Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {isLoading ? (
-                    // Skeletons
-                    Array(5).fill(0).map((_, i) => (
-                        <div key={i} className="aspect-[3/4] bg-forest-100/50 rounded-xl animate-pulse" />
-                    ))
-                ) : filteredBooks?.map(book => (
-                    <Card key={book.bookId} className="group cursor-pointer hover:-translate-y-1 hover:shadow-xl transition-all duration-300 border-none bg-white p-0 overflow-hidden">
-                        {/* Cover */}
-                        <div className="aspect-[3/4] bg-slate-100 relative overflow-hidden">
-                            {book.coverUrl ? (
-                                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-forest-50 to-forest-100 text-forest-300">
-                                    <BookOpen className="w-12 h-12 opacity-50" />
+                    {/* 로딩 */}
+                    {isLoading ? (
+                        <div className="flex items-center justify-center py-20">
+                            <Loader2 size={48} className="text-emerald-500 animate-spin" />
+                        </div>
+                    ) : books.length === 0 ? (
+                        <div className="text-center py-20">
+                            <BookOpen size={64} className="text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500 text-lg">검색 결과가 없습니다</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* 도서 그리드 */}
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+                                {books.map((book, index) => (
+                                    <BookCard key={book.bookId} book={book} index={index} />
+                                ))}
+                            </div>
+
+                            {/* 페이지네이션 */}
+                            {totalPages > 1 && (
+                                <div className="flex items-center justify-center gap-2 mt-12">
+                                    <button
+                                        onClick={() => handlePageChange(currentPage - 1)}
+                                        disabled={currentPage === 0}
+                                        className="p-2 rounded-xl bg-white border border-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-50 transition-colors"
+                                    >
+                                        <ChevronLeft size={20} />
+                                    </button>
+
+                                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                                        const pageNum = Math.max(0, Math.min(currentPage - 2, totalPages - 5)) + i;
+                                        if (pageNum >= totalPages) return null;
+                                        return (
+                                            <button
+                                                key={pageNum}
+                                                onClick={() => handlePageChange(pageNum)}
+                                                className={`w-10 h-10 rounded-xl font-bold transition-colors ${pageNum === currentPage
+                                                        ? 'bg-emerald-500 text-white'
+                                                        : 'bg-white border border-emerald-200 hover:bg-emerald-50'
+                                                    }`}
+                                            >
+                                                {pageNum + 1}
+                                            </button>
+                                        );
+                                    })}
+
+                                    <button
+                                        onClick={() => handlePageChange(currentPage + 1)}
+                                        disabled={currentPage >= totalPages - 1}
+                                        className="p-2 rounded-xl bg-white border border-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-emerald-50 transition-colors"
+                                    >
+                                        <ChevronRight size={20} />
+                                    </button>
                                 </div>
                             )}
-                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                <Button size="sm" className="rounded-full bg-white text-forest-800 hover:bg-forest-50 shadow-lg border-none">상세보기</Button>
-                            </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="p-4">
-                            <div className="text-xs text-forest-500 font-medium mb-1">{categories.find(c => c.id === book.categoryId)?.name || '기타'}</div>
-                            <h3 className="font-bold text-forest-900 line-clamp-1 mb-1 group-hover:text-forest-600 transition-colors">{book.title}</h3>
-                            <p className="text-sm text-slate-500 line-clamp-1">{book.author}</p>
-                            <div className="mt-3 flex items-center justify-between">
-                                <span className="font-bold text-forest-800">{book.price.toLocaleString()}원</span>
-                            </div>
-                        </div>
-                    </Card>
-                ))}
-            </div>
-
-            {!isLoading && filteredBooks?.length === 0 && (
-                <div className="text-center py-20 text-slate-400">
-                    검색 결과가 없습니다.
+                        </>
+                    )}
                 </div>
-            )}
+            </main>
 
+            <Footer />
         </div>
     );
-}
+};
+
+// 도서 카드 컴포넌트
+const BookCard: React.FC<{ book: Book; index: number }> = ({ book, index }) => {
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: index * 0.05 }}
+        >
+            <Link
+                to={`/books/${book.bookId}`}
+                className="block group"
+            >
+                <div className="relative aspect-[2/3] rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-100 to-green-50 shadow-lg group-hover:shadow-xl transition-all mb-3">
+                    {book.coverUrl ? (
+                        <img
+                            src={book.coverUrl}
+                            alt={book.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <BookOpen size={48} className="text-emerald-300" />
+                        </div>
+                    )}
+
+                    {/* 권한 배지 */}
+                    {book.viewPermission === 'PREMIUM' && (
+                        <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-lg flex items-center gap-1">
+                            <Crown size={12} /> PREMIUM
+                        </div>
+                    )}
+                    {book.viewPermission === 'FREE' && (
+                        <div className="absolute top-2 right-2 bg-emerald-500 text-white text-xs font-bold px-2 py-1 rounded-lg">
+                            FREE
+                        </div>
+                    )}
+
+                    {/* 성인 배지 */}
+                    {book.isAdultOnly && (
+                        <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-lg">
+                            19+
+                        </div>
+                    )}
+                </div>
+
+                <h3 className="font-bold text-gray-900 line-clamp-2 group-hover:text-emerald-600 transition-colors">
+                    {book.title}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">{book.author}</p>
+                <div className="flex items-center gap-2 mt-2">
+                    <span className="text-emerald-600 font-bold">
+                        {book.price > 0 ? `₩${book.price.toLocaleString()}` : '무료'}
+                    </span>
+                </div>
+            </Link>
+        </motion.div>
+    );
+};
+
+export default BooksPage;

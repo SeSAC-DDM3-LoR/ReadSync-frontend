@@ -1,117 +1,229 @@
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { 
-    LayoutDashboard, 
-    Users, 
-    BookOpen, 
-    LogOut, 
-    Home, 
-    Settings 
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+    LayoutDashboard, Users, BookOpen, AlertTriangle, Bell,
+    TrendingUp, Eye, ArrowUpRight, Loader2, Shield
 } from 'lucide-react';
+import useAuthStore from '../../stores/authStore';
+import { adminUserService, adminReportService } from '../../services/adminService';
 
-export function AdminDashboard() {
-    const { user, logout } = useAuth();
+const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
+    const { user, isAuthenticated } = useAuthStore();
+    const [isLoading, setIsLoading] = useState(true);
+    const [stats, setStats] = useState({
+        totalUsers: 0,
+        pendingReports: 0,
+    });
 
-    const handleLogout = () => {
-        logout();
-        navigate('/admin/login');
+    useEffect(() => {
+        const isAdmin = user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN';
+        if (!isAuthenticated || !isAdmin) {
+            navigate('/admin', { replace: true });
+            return;
+        }
+        loadStats();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated, user?.role]);
+
+    const loadStats = async () => {
+        try {
+            const [usersRes, reportsRes] = await Promise.all([
+                adminUserService.getAllUsers(0, 1).catch(() => ({ totalElements: 0 })),
+                adminReportService.getReports('PENDING', 0, 1).catch(() => ({ totalElements: 0 })),
+            ]);
+            setStats({
+                totalUsers: usersRes.totalElements || 0,
+                pendingReports: reportsRes.totalElements || 0,
+            });
+        } catch (error) {
+            console.error('Failed to load stats:', error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
+    const menuItems = [
+        { path: '/admin/users', label: '회원 관리', icon: Users, count: stats.totalUsers },
+        { path: '/admin/books', label: '도서 관리', icon: BookOpen },
+        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle, count: stats.pendingReports, highlight: stats.pendingReports > 0 },
+        { path: '/admin/notices', label: '공지 관리', icon: Bell },
+    ];
+
     return (
-        <div className="min-h-screen bg-slate-50 flex">
-            {/* Sidebar */}
-            <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col fixed h-full">
-                <div className="p-6 border-b border-slate-800">
-                    <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                        <span className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs">RS</span>
-                        Admin
-                    </h1>
+        <div className="min-h-screen bg-gray-900">
+            {/* 사이드바 */}
+            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
+                <div className="flex items-center gap-3 mb-8">
+                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
+                        <Shield size={24} className="text-white" />
+                    </div>
+                    <div>
+                        <h1 className="text-white font-bold text-lg">ReadSync</h1>
+                        <p className="text-gray-400 text-xs">Admin Panel</p>
+                    </div>
                 </div>
 
-                <nav className="flex-1 p-4 space-y-1">
-                    <div className="px-4 py-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Menu</div>
-                    
-                    {/* 대시보드 (현재 페이지) */}
-                    <Link to="/admin/dashboard" className="flex items-center gap-3 px-4 py-3 bg-blue-600/10 text-blue-400 rounded-xl">
-                        <LayoutDashboard className="w-5 h-5" />
-                        대시보드
-                    </Link>
-                    
-                    <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl transition-colors text-left opacity-50 cursor-not-allowed">
-                        <Users className="w-5 h-5" />
-                        회원 관리
-                    </button>
-                    
-                    {/* [수정됨] 도서 관리 페이지로 이동하는 링크 활성화 */}
-                    <Link to="/admin/books" className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800 text-slate-300 rounded-xl transition-colors">
-                        <BookOpen className="w-5 h-5" />
-                        도서 관리
+                <nav className="space-y-2">
+                    <Link
+                        to="/admin/dashboard"
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-400"
+                    >
+                        <LayoutDashboard size={20} />
+                        <span className="font-medium">대시보드</span>
                     </Link>
 
-                    <button className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 rounded-xl transition-colors text-left opacity-50 cursor-not-allowed">
-                        <Settings className="w-5 h-5" />
-                        시스템 설정
-                    </button>
+                    {menuItems.map((item) => {
+                        const Icon = item.icon;
+                        return (
+                            <Link
+                                key={item.path}
+                                to={item.path}
+                                className="flex items-center justify-between px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Icon size={20} />
+                                    <span className="font-medium">{item.label}</span>
+                                </div>
+                                {item.count !== undefined && (
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${item.highlight ? 'bg-red-500 text-white' : 'bg-gray-600 text-gray-300'
+                                        }`}>
+                                        {item.count}
+                                    </span>
+                                )}
+                            </Link>
+                        );
+                    })}
                 </nav>
 
-                <div className="p-4 border-t border-slate-800 space-y-2">
-                    <button 
-                        onClick={() => navigate('/')}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 text-emerald-400 rounded-xl transition-colors"
+                <div className="absolute bottom-6 left-6 right-6">
+                    <Link
+                        to="/"
+                        className="block text-center py-3 text-gray-400 hover:text-white transition-colors"
                     >
-                        <Home className="w-5 h-5" />
-                        메인 사이트 이동
-                    </button>
-                    
-                    <button 
-                        onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800 text-red-400 rounded-xl transition-colors"
-                    >
-                        <LogOut className="w-5 h-5" />
-                        로그아웃
-                    </button>
+                        ← 사이트로 돌아가기
+                    </Link>
                 </div>
             </aside>
 
-            {/* Main Content */}
-            <main className="flex-1 ml-64 p-8">
-                <header className="flex justify-between items-center mb-8">
-                    <div>
-                        <h2 className="text-2xl font-bold text-slate-800">대시보드</h2>
-                        <p className="text-slate-500 mt-1">
-                            접속 계정: <span className="font-semibold text-blue-600">{user?.userName} ({user?.loginId})</span>
-                        </p>
-                    </div>
-                </header>
-
-                {/* Status Cards (Dummy Data) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <h3 className="text-slate-500 text-sm font-medium mb-2">총 사용자</h3>
-                        <p className="text-3xl font-bold text-slate-800">1,234</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <h3 className="text-slate-500 text-sm font-medium mb-2">오늘 방문자</h3>
-                        <p className="text-3xl font-bold text-slate-800">128</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                        <h3 className="text-slate-500 text-sm font-medium mb-2">신규 콘텐츠</h3>
-                        <p className="text-3xl font-bold text-slate-800">12</p>
-                    </div>
+            {/* 메인 콘텐츠 */}
+            <main className="ml-64 p-8">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-white mb-2">대시보드</h1>
+                    <p className="text-gray-400">ReadSync 관리자 페이지에 오신 것을 환영합니다.</p>
                 </div>
 
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center">
-                    <div className="inline-flex p-4 bg-slate-100 rounded-full mb-4">
-                        <LayoutDashboard className="w-8 h-8 text-slate-400" />
+                {isLoading ? (
+                    <div className="flex items-center justify-center py-20">
+                        <Loader2 size={48} className="text-emerald-500 animate-spin" />
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-2">관리자 기능 준비 중</h3>
-                    <p className="text-slate-500 max-w-md mx-auto">
-                        현재 관리자 로그인 기능이 정상적으로 연동되었습니다.<br/>
-                        좌측 메뉴의 <strong>'도서 관리'</strong>를 눌러 책을 등록하거나 조회할 수 있습니다.
-                    </p>
-                </div>
+                ) : (
+                    <>
+                        {/* 통계 카드 */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                            <StatCard
+                                label="전체 회원"
+                                value={stats.totalUsers}
+                                icon={<Users className="text-blue-400" />}
+                                color="blue"
+                            />
+                            <StatCard
+                                label="대기 중 신고"
+                                value={stats.pendingReports}
+                                icon={<AlertTriangle className="text-amber-400" />}
+                                color="amber"
+                                highlight={stats.pendingReports > 0}
+                            />
+                            <StatCard
+                                label="오늘 방문자"
+                                value={0}
+                                icon={<Eye className="text-purple-400" />}
+                                color="purple"
+                            />
+                            <StatCard
+                                label="신규 가입"
+                                value={0}
+                                icon={<TrendingUp className="text-green-400" />}
+                                color="green"
+                            />
+                        </div>
+
+                        {/* 빠른 링크 */}
+                        <div className="grid md:grid-cols-2 gap-6">
+                            <QuickLinkCard
+                                title="회원 관리"
+                                description="회원 목록 조회 및 상태 변경"
+                                link="/admin/users"
+                                icon={<Users size={24} />}
+                            />
+                            <QuickLinkCard
+                                title="신고 관리"
+                                description="신고 내역 확인 및 처리"
+                                link="/admin/reports"
+                                icon={<AlertTriangle size={24} />}
+                                highlight={stats.pendingReports > 0}
+                            />
+                        </div>
+                    </>
+                )}
             </main>
         </div>
     );
-}
+};
+
+const StatCard: React.FC<{
+    label: string;
+    value: number;
+    icon: React.ReactNode;
+    color: string;
+    highlight?: boolean;
+}> = ({ label, value, icon, color, highlight }) => (
+    <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className={`bg-gray-800 rounded-2xl p-6 border ${highlight ? 'border-red-500' : 'border-gray-700'
+            }`}
+    >
+        <div className="flex items-center justify-between mb-4">
+            <div className={`p-3 rounded-xl bg-${color}-500/20`}>
+                {icon}
+            </div>
+        </div>
+        <p className="text-3xl font-bold text-white mb-1">{value.toLocaleString()}</p>
+        <p className="text-gray-400 text-sm">{label}</p>
+    </motion.div>
+);
+
+const QuickLinkCard: React.FC<{
+    title: string;
+    description: string;
+    link: string;
+    icon: React.ReactNode;
+    highlight?: boolean;
+}> = ({ title, description, link, icon, highlight }) => (
+    <Link to={link}>
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.02 }}
+            className={`bg-gray-800 rounded-2xl p-6 border ${highlight ? 'border-red-500' : 'border-gray-700'
+                } hover:border-emerald-500 transition-colors`}
+        >
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 rounded-xl bg-gray-700 text-emerald-400">
+                        {icon}
+                    </div>
+                    <div>
+                        <h3 className="text-white font-bold text-lg">{title}</h3>
+                        <p className="text-gray-400 text-sm">{description}</p>
+                    </div>
+                </div>
+                <ArrowUpRight className="text-gray-500" />
+            </div>
+        </motion.div>
+    </Link>
+);
+
+export default AdminDashboard;

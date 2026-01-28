@@ -1,122 +1,367 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { api, type Book } from '../lib/api';
-import { Button } from '../components/ui/Button';
-import { Card } from '../components/ui/Card';
-import { ArrowLeft, BookOpen, Star, Share2, Heart } from 'lucide-react';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+    BookOpen, Star, ShoppingCart, Heart, Share2, ArrowLeft
 
-export function BookDetailPage() {
-    const { bookId } = useParams();
+    ,
+    Clock, User, Calendar, Globe, Loader2, ChevronRight, AlertCircle,
+    ThumbsUp, ThumbsDown, Plus, Crown
+} from 'lucide-react';
+import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
+import { bookService } from '../services/bookService';
+import { chapterService } from '../services/libraryService';
+import { reviewService } from '../services/reviewService';
+import { cartService } from '../services/cartService';
+import useAuthStore from '../stores/authStore';
+import type { Book } from '../services/bookService';
+import type { Chapter } from '../services/libraryService';
+import type { Review } from '../services/reviewService';
+import UserProfilePopup from '../components/UserProfilePopup';
+
+const BookDetailPage: React.FC = () => {
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const [isLiked, setIsLiked] = useState(false);
+    const { isAuthenticated } = useAuthStore();
 
-    const { data: book, isLoading, error } = useQuery<Book>({
-        queryKey: ['book', bookId],
-        queryFn: async () => {
-            const res = await api.get(`/books/${bookId}`);
-            return res.data;
-        }
+    const [book, setBook] = useState<Book | null>(null);
+    const [chapters, setChapters] = useState<Chapter[]>([]);
+    const [reviews, setReviews] = useState<Review[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'info' | 'chapters' | 'reviews'>('info');
+    const [isAddingToCart, setIsAddingToCart] = useState(false);
+
+    // 프로필 팝업 상태
+    const [profilePopup, setProfilePopup] = useState<{ isOpen: boolean; userId: number; position?: { x: number; y: number } }>({
+        isOpen: false,
+        userId: 0
     });
 
-    if (isLoading) return <div className="p-8 text-center text-forest-500">도서 정보를 불러오는 중...</div>;
-    if (!book) return <div className="p-8 text-center text-forest-500">도서를 찾을 수 없습니다.</div>;
+    // 프로필 클릭 핸들러
+    const handleProfileClick = (userId: number | undefined, event: React.MouseEvent) => {
+        if (!userId) return;
+        setProfilePopup({
+            isOpen: true,
+            userId,
+            position: { x: event.clientX, y: event.clientY }
+        });
+    };
+
+    useEffect(() => {
+        if (id) {
+            loadBookData(parseInt(id));
+        }
+    }, [id]);
+
+    const loadBookData = async (bookId: number) => {
+        setIsLoading(true);
+        setError(null);
+        try {
+            const [bookData, chaptersData, reviewsData] = await Promise.all([
+                bookService.getBook(bookId),
+                chapterService.getChaptersByBook(bookId).catch(() => []),
+                reviewService.getReviewsByBook(bookId, 0, 10).catch(() => ({ content: [] })),
+            ]);
+            setBook(bookData);
+            setChapters(chaptersData);
+            setReviews(reviewsData.content || []);
+        } catch (err) {
+            console.error('Failed to load book:', err);
+            setError('도서를 불러오는데 실패했습니다.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleAddToCart = async () => {
+        if (!isAuthenticated) {
+            navigate('/login');
+            return;
+        }
+        if (!book) return;
+
+        setIsAddingToCart(true);
+        try {
+            await cartService.addToCart({ bookId: book.bookId, quantity: 1 });
+            alert('장바구니에 추가되었습니다!');
+        } catch (error: any) {
+            console.error('Failed to add to cart:', error);
+            const errorCode = error.response?.data?.code;
+            if (errorCode === 'ALREADY_OWNED_BOOK') {
+                alert('이미 소유한 책입니다. 내 서재에서 확인해주세요!');
+            } else {
+                alert('장바구니 추가에 실패했습니다.');
+            }
+        } finally {
+            setIsAddingToCart(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
+                <Header />
+                <div className="flex items-center justify-center py-40">
+                    <Loader2 size={48} className="text-emerald-500 animate-spin" />
+                </div>
+                <Footer />
+            </div>
+        );
+    }
+
+    if (error || !book) {
+        return (
+            <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
+                <Header />
+                <div className="flex flex-col items-center justify-center py-40">
+                    <AlertCircle size={64} className="text-red-400 mb-4" />
+                    <p className="text-gray-600 text-lg">{error || '도서를 찾을 수 없습니다.'}</p>
+                    <Link to="/books" className="mt-4 text-emerald-600 hover:underline">
+                        도서 목록으로 돌아가기
+                    </Link>
+                </div>
+                <Footer />
+            </div>
+        );
+    }
 
     return (
-        <div className="max-w-5xl mx-auto pb-10">
-            <button
-                onClick={() => navigate(-1)}
-                className="flex items-center gap-2 text-forest-500 hover:text-forest-700 mb-6 transition-colors"
-            >
-                <ArrowLeft className="w-5 h-5" />
-                돌아가기
-            </button>
+        <div className="min-h-screen bg-gradient-to-b from-emerald-50 to-white">
+            <Header />
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-                {/* Book Cover */}
-                <div className="col-span-12 md:col-span-4">
-                    <Card className="p-4 border-0 shadow-xl bg-white sticky top-24">
-                        <div className="aspect-[2/3] bg-gradient-to-br from-forest-50 to-emerald-50 rounded-lg overflow-hidden relative shadow-inner">
-                            {book.coverUrl ? (
-                                <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+            <main className="pt-24 pb-16 px-4">
+                <div className="max-w-6xl mx-auto">
+                    {/* 뒤로가기 */}
+                    <button
+                        onClick={() => navigate(-1)}
+                        className="flex items-center gap-2 text-gray-600 hover:text-emerald-600 mb-8 transition-colors"
+                    >
+                        <ArrowLeft size={20} />
+                        <span>뒤로가기</span>
+                    </button>
+
+                    {/* 도서 정보 헤더 */}
+                    <div className="grid md:grid-cols-3 gap-8 mb-12">
+                        {/* 표지 */}
+                        <motion.div
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="relative"
+                        >
+                            <div className="aspect-[2/3] rounded-3xl overflow-hidden bg-gradient-to-br from-emerald-100 to-green-50 shadow-2xl">
+                                {book.coverUrl ? (
+                                    <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+                                ) : (
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        <BookOpen size={80} className="text-emerald-300" />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 배지들 */}
+                            <div className="absolute top-4 left-4 flex flex-col gap-2">
+                                {book.viewPermission === 'PREMIUM' && (
+                                    <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
+                                        <Crown size={16} /> PREMIUM
+                                    </div>
+                                )}
+                                {book.viewPermission === 'FREE' && (
+                                    <div className="bg-emerald-500 text-white text-sm font-bold px-3 py-1.5 rounded-xl">
+                                        FREE
+                                    </div>
+                                )}
+                                {book.isAdultOnly && (
+                                    <div className="bg-red-500 text-white text-sm font-bold px-3 py-1.5 rounded-xl">
+                                        19+ 성인
+                                    </div>
+                                )}
+                            </div>
+                        </motion.div>
+
+                        {/* 정보 */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="md:col-span-2"
+                        >
+                            <h1 className="text-3xl md:text-4xl font-extrabold text-gray-900 mb-4">{book.title}</h1>
+
+                            <div className="flex flex-wrap items-center gap-4 mb-6 text-gray-600">
+                                <span className="flex items-center gap-1">
+                                    <User size={16} /> {book.author}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <Calendar size={16} /> {book.publishedDate}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <Globe size={16} /> {book.language || '한국어'}
+                                </span>
+                            </div>
+
+                            {/* 가격 */}
+                            <div className="mb-6">
+                                <span className="text-3xl font-extrabold text-emerald-600">
+                                    {book.price > 0 ? `₩${book.price.toLocaleString()}` : '무료'}
+                                </span>
+                            </div>
+
+                            {/* 액션 버튼 */}
+                            <div className="flex flex-wrap gap-3 mb-8">
+                                <button
+                                    onClick={handleAddToCart}
+                                    disabled={isAddingToCart}
+                                    className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transition-all disabled:opacity-50"
+                                >
+                                    {isAddingToCart ? (
+                                        <Loader2 size={20} className="animate-spin" />
+                                    ) : (
+                                        <ShoppingCart size={20} />
+                                    )}
+                                    장바구니 담기
+                                </button>
+                                <button className="flex items-center gap-2 px-6 py-3 bg-white border-2 border-emerald-200 text-emerald-700 font-bold rounded-xl hover:bg-emerald-50 transition-colors">
+                                    <Heart size={20} />
+                                    찜하기
+                                </button>
+                                <button className="p-3 bg-white border-2 border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors">
+                                    <Share2 size={20} />
+                                </button>
+                            </div>
+
+                            {/* 출판사 */}
+                            <p className="text-sm text-gray-500">출판사: {book.publisher}</p>
+                        </motion.div>
+                    </div>
+
+                    {/* 탭 */}
+                    <div className="flex border-b border-gray-200 mb-6">
+                        {(['info', 'chapters', 'reviews'] as const).map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setActiveTab(tab)}
+                                className={`px-6 py-4 font-bold transition-colors relative ${activeTab === tab ? 'text-emerald-600' : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                            >
+                                {tab === 'info' && '도서 정보'}
+                                {tab === 'chapters' && `목차 (${chapters.length})`}
+                                {tab === 'reviews' && `리뷰 (${reviews.length})`}
+                                {activeTab === tab && (
+                                    <motion.div
+                                        layoutId="tab-indicator"
+                                        className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500"
+                                    />
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* 탭 콘텐츠 */}
+                    {activeTab === 'info' && (
+                        <div className="prose max-w-none">
+                            <h3 className="text-xl font-bold text-gray-900 mb-4">책 소개</h3>
+                            <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                                {book.summary || '도서 소개가 없습니다.'}
+                            </p>
+                        </div>
+                    )}
+
+                    {activeTab === 'chapters' && (
+                        <div className="space-y-2">
+                            {chapters.length === 0 ? (
+                                <p className="text-gray-500 text-center py-8">목차 정보가 없습니다.</p>
                             ) : (
-                                <div className="w-full h-full flex items-center justify-center text-forest-200">
-                                    <BookOpen className="w-20 h-20" />
-                                </div>
+                                chapters.map((chapter, index) => (
+                                    <div
+                                        key={chapter.chapterId}
+                                        className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 hover:border-emerald-200 transition-colors"
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <span className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-lg flex items-center justify-center font-bold text-sm">
+                                                {chapter.sequence || index + 1}
+                                            </span>
+                                            <span className="font-medium text-gray-800">{chapter.chapterName}</span>
+                                        </div>
+                                        <ChevronRight size={20} className="text-gray-400" />
+                                    </div>
+                                ))
                             )}
                         </div>
-                        <div className="mt-6 flex flex-col gap-3">
-                            <Button className="w-full py-6 text-lg font-bold shadow-lg shadow-forest-500/20">
-                                <BookOpen className="w-5 h-5 mr-2" />
-                                {book.viewPermission !== 'FREE' ? '구매하기' : '무료로 읽기'}
-                            </Button>
-                            <Button variant="outline" className="w-full">
-                                서재에 담기
-                            </Button>
-                        </div>
-                    </Card>
-                </div>
+                    )}
 
-                {/* Book Info */}
-                <div className="col-span-12 md:col-span-8 space-y-8">
-                    <div>
-                        <div className="flex items-center gap-2 mb-2 text-sm text-forest-600 font-medium">
-                            <span className="bg-forest-100 px-2 py-0.5 rounded">소설</span>
-                            {book.isAdultOnly && <span className="bg-red-100 text-red-600 px-2 py-0.5 rounded">19세 미만 구독불가</span>}
-                        </div>
-                        <h1 className="text-4xl font-serif font-bold text-forest-900 mb-3 leading-tight">{book.title}</h1>
-                        <p className="text-xl text-forest-700 mb-6">{book.author}</p>
+                    {activeTab === 'reviews' && (
+                        <div className="space-y-4">
+                            {reviews.length === 0 ? (
+                                <p className="text-gray-500 text-center py-8">아직 리뷰가 없습니다. 첫 리뷰를 작성해보세요!</p>
+                            ) : (
+                                reviews.map((review) => (
+                                    <div
+                                        key={review.reviewId}
+                                        className="p-6 bg-white rounded-2xl border border-gray-100"
+                                    >
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div
+                                                className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={(e) => handleProfileClick(review.writerId, e)}
+                                            >
+                                                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center font-bold text-emerald-600">
+                                                    {review.writerName?.charAt(0) || '?'}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-gray-900 hover:text-emerald-600">{review.writerName}</p>
+                                                    <div className="flex items-center gap-1">
+                                                        {Array.from({ length: 5 }).map((_, i) => (
+                                                            <Star
+                                                                key={i}
+                                                                size={14}
+                                                                className={i < review.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <span className="text-sm text-gray-500">
+                                                {new Date(review.createdAt).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                        <p className="text-gray-700">{review.content}</p>
+                                        <div className="flex items-center gap-4 mt-4">
+                                            <button className="flex items-center gap-1 text-gray-500 hover:text-emerald-600">
+                                                <ThumbsUp size={16} /> {review.likeCount}
+                                            </button>
+                                            <button className="flex items-center gap-1 text-gray-500 hover:text-red-500">
+                                                <ThumbsDown size={16} /> {review.dislikeCount}
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
 
-                        <div className="flex items-center gap-6 py-4 border-y border-forest-100">
-                            <div className="flex items-center gap-1.5">
-                                <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
-                                <span className="font-bold text-lg text-forest-900">4.8</span>
-                                <span className="text-slate-400 text-sm">(128 reviews)</span>
-                            </div>
-                            <div className="h-4 w-px bg-forest-200" />
-                            <div className="flex items-center gap-4">
-                                <button className="flex items-center gap-1 text-slate-500 hover:text-red-500 transition-colors" onClick={() => setIsLiked(!isLiked)}>
-                                    <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                                    <span>좋아요</span>
+                            {/* 리뷰 작성 버튼 */}
+                            {isAuthenticated && (
+                                <button className="w-full py-4 border-2 border-dashed border-emerald-300 text-emerald-600 font-bold rounded-2xl hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2">
+                                    <Plus size={20} />
+                                    리뷰 작성하기
                                 </button>
-                                <button className="flex items-center gap-1 text-slate-500 hover:text-forest-600 transition-colors">
-                                    <Share2 className="w-5 h-5" />
-                                    <span>공유</span>
-                                </button>
-                            </div>
+                            )}
                         </div>
-                    </div>
-
-                    <div className="prose prose-forest max-w-none">
-                        <h3 className="font-serif text-2xl font-bold text-forest-900 mb-4">책 소개</h3>
-                        <p className="text-lg leading-relaxed text-forest-800/80 whitespace-pre-wrap">
-                            {book.summary}
-                        </p>
-                    </div>
-
-                    <div>
-                        <h3 className="font-serif text-2xl font-bold text-forest-900 mb-4">상세 정보</h3>
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="flex justify-between p-3 bg-forest-50 rounded-lg">
-                                <span className="text-forest-600">출판사</span>
-                                <span className="font-medium text-forest-900">{book.publisher || '정보 없음'}</span>
-                            </div>
-                            <div className="flex justify-between p-3 bg-forest-50 rounded-lg">
-                                <span className="text-forest-600">출간일</span>
-                                <span className="font-medium text-forest-900">{book.publishedDate || '정보 없음'}</span>
-                            </div>
-                            <div className="flex justify-between p-3 bg-forest-50 rounded-lg">
-                                <span className="text-forest-600">가격</span>
-                                <span className="font-medium text-forest-900">{book.price.toLocaleString()}원</span>
-                            </div>
-                            <div className="flex justify-between p-3 bg-forest-50 rounded-lg">
-                                <span className="text-forest-600">언어</span>
-                                <span className="font-medium text-forest-900">{book.language}</span>
-                            </div>
-                        </div>
-                    </div>
+                    )}
                 </div>
-            </div>
+            </main>
+
+            <Footer />
+
+            {/* 프로필 팝업 */}
+            <UserProfilePopup
+                isOpen={profilePopup.isOpen}
+                userId={profilePopup.userId}
+                onClose={() => setProfilePopup({ ...profilePopup, isOpen: false })}
+                position={profilePopup.position}
+            />
         </div>
     );
-}
+};
+
+export default BookDetailPage;
