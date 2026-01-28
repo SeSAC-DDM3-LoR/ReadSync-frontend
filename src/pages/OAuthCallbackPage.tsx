@@ -12,10 +12,34 @@ const OAuthCallbackPage: React.FC = () => {
 
     const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
     const [message, setMessage] = useState('로그인 처리 중...');
+    const [subMessage, setSubMessage] = useState('');
 
     useEffect(() => {
         const handleCallback = async () => {
             try {
+                // URL에서 에러 파라미터 확인
+                const errorType = searchParams.get('error');
+
+                if (errorType) {
+                    // 에러가 있는 경우 (정지된 유저 등)
+                    if (errorType === 'SUSPENDED_USER') {
+                        setStatus('error');
+                        setMessage('정지된 계정입니다');
+                        setSubMessage('현재 정지된 계정입니다.\n잘못된 정지일 경우 고객센터로 연락 부탁드립니다.');
+                        return;
+                    } else if (errorType === 'WITHDRAWN_USER') {
+                        setStatus('error');
+                        setMessage('탈퇴한 계정입니다');
+                        setSubMessage('이미 탈퇴 처리된 계정입니다.\n새로운 계정으로 가입해 주세요.');
+                        return;
+                    } else {
+                        setStatus('error');
+                        setMessage('로그인 실패');
+                        setSubMessage('로그인 중 오류가 발생했습니다.');
+                        return;
+                    }
+                }
+
                 // URL에서 토큰과 isNewUser 파라미터 추출
                 const accessToken = searchParams.get('accessToken');
                 const refreshToken = searchParams.get('refreshToken');
@@ -49,11 +73,6 @@ const OAuthCallbackPage: React.FC = () => {
                 console.error('OAuth callback error:', error);
                 setStatus('error');
                 setMessage(error.message || '로그인 처리 중 오류가 발생했습니다.');
-
-                // 3초 후 로그인 페이지로
-                setTimeout(() => {
-                    navigate('/login', { replace: true });
-                }, 3000);
             }
         };
 
@@ -114,7 +133,18 @@ const OAuthCallbackPage: React.FC = () => {
                 {status === 'success' && (
                     <p className="text-emerald-600 text-sm">페이지로 이동합니다...</p>
                 )}
-                {status === 'error' && (
+                {status === 'error' && subMessage && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mt-4">
+                        <p className="text-gray-700 text-sm whitespace-pre-line">{subMessage}</p>
+                        <button
+                            onClick={() => navigate('/login', { replace: true })}
+                            className="mt-4 px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                        >
+                            로그인 페이지로 돌아가기
+                        </button>
+                    </div>
+                )}
+                {status === 'error' && !subMessage && (
                     <p className="text-gray-500 text-sm">로그인 페이지로 돌아갑니다...</p>
                 )}
             </motion.div>

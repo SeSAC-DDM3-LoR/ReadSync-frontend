@@ -72,6 +72,7 @@ const AdminUsersPage: React.FC = () => {
     const getRoleBadge = (role: string) => {
         switch (role) {
             case 'ADMIN':
+            case 'ROLE_ADMIN':
                 return <span className="px-2 py-1 bg-purple-500/20 text-purple-400 rounded-lg text-xs font-medium">관리자</span>;
             default:
                 return <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded-lg text-xs font-medium">사용자</span>;

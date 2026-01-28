@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, User, Menu, Search, X, ShoppingCart, Bell, LogOut, Settings, ChevronDown } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
+import { cartService } from '../../services/cartService';
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -11,6 +12,34 @@ const Header: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [cartCount, setCartCount] = useState(0);
+
+  // 장바구니 개수 업데이트
+  React.useEffect(() => {
+    const fetchCartCount = async () => {
+      if (isAuthenticated) {
+        try {
+          const cartItems = await cartService.getCart();
+          setCartCount(cartItems.length);
+        } catch (error) {
+          console.error('Failed to fetch cart count', error);
+          setCartCount(0);
+        }
+      } else {
+        setCartCount(0);
+      }
+    };
+
+    fetchCartCount();
+
+    // 장바구니 변경 이벤트 리스너 (커스텀 이벤트)
+    const handleCartUpdate = () => fetchCartCount();
+    window.addEventListener('cartUpdated', handleCartUpdate);
+
+    return () => {
+      window.removeEventListener('cartUpdated', handleCartUpdate);
+    };
+  }, [isAuthenticated]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,9 +147,11 @@ const Header: React.FC = () => {
             {/* 장바구니 */}
             <Link to="/cart" className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">
               <ShoppingCart size={20} />
-              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                3
-              </span>
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-emerald-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
             </Link>
 
             {/* 로그인 상태에 따른 UI */}

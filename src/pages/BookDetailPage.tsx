@@ -142,6 +142,8 @@ const BookDetailPage: React.FC = () => {
             await cartService.addToCart({ bookId: book.bookId, quantity: 1 });
             // 장바구니에 추가 성공 시 상태 업데이트
             setCartBookIds(prev => new Set(prev).add(book.bookId));
+            // 헤더 장바구니 카운트 갱신 이벤트 발생
+            window.dispatchEvent(new Event('cartUpdated'));
             alert('장바구니에 추가되었습니다!');
         } catch (error: any) {
             console.error('Failed to add to cart:', error);

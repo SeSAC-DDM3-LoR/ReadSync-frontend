@@ -61,6 +61,7 @@ export interface UserProfile {
     tag: string;
     profileImage: string | null;
     role: string; // "USER" | "ADMIN"
+    status: string; // "ACTIVE" | "BANNED" | "WITHDRAWN"
     experience: number;
     preferredGenre: string;
     providerId: string;

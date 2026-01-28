@@ -7,18 +7,17 @@ import useAuthStore from '../stores/authStore';
 import { bookService } from '../services/bookService';
 import type { Book as BookType } from '../services/bookService';
 import { creditService } from '../services/userService';
-import { libraryService, bookLogService } from '../services/libraryService';
-import type { Library } from '../services/libraryService';
+import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
+import type { Level } from '../services/levelService';
 import {
-  Book, Trophy, Coins, ChevronRight, Leaf, Sparkles,
+  Book, Trophy, Coins, ChevronRight, ChevronLeft, Leaf, Sparkles,
   Zap, Crown, BookOpen, TreeDeciduous, Volume2, Loader
 } from 'lucide-react';
 
 // 이미지 Assets
 import cloudImg from '../assets/cloud.png';
-import treeBase from '../assets/tree-base.png';
-import treeTrunk from '../assets/tree-trunk.png';
-import character from '../assets/character.png';
+import tree from '../assets/tree.png';
+import character from '../assets/character2.png';
 
 // 파티클 컴포넌트
 const Particles: React.FC = () => {
@@ -216,70 +215,73 @@ const MainPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 내 서재 (최근 열어본 책)
-  const [recentBooks, setRecentBooks] = useState<Library[]>([]);
-  const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+  // 페이지네이션 상태
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const BOOKS_PER_PAGE = 10;
 
   // 크레딧 상태
   const [credits, setCredits] = useState<number>(0);
 
+  // 레벨 정보 상태
+  const [levels, setLevels] = useState<Level[]>([]);
+
   // 유저 정보 가져오기
   const { user } = useAuthStore();
 
-  // 도서 목록 및 크레딧 가져오기
+  // 경험치 진행률 계산 (레벨 데이터 기반)
+  const expProgress = user && levels.length > 0
+    ? getExpProgress(user.experience || 0, user.levelId || 1, levels)
+    : 0;
+  const expNeeded = user && levels.length > 0
+    ? getExpNeededForNextLevel(user.levelId || 1, levels)
+    : 100;
+
+  // 도서 목록 가져오기 (페이지 변경 시 재호출)
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchBooks = async () => {
       try {
         setIsLoading(true);
-
-        // 도서 목록 가져오기
-        const booksResponse = await bookService.getBooks(0, 5);
+        const booksResponse = await bookService.getBooks(currentPage, BOOKS_PER_PAGE);
         setBooks(booksResponse.content);
-
-        // 크레딧 및 내 서재 가져오기 (로그인된 경우에만)
-        if (user) {
-          try {
-            const creditBalance = await creditService.getMyBalance();
-            setCredits(creditBalance);
-          } catch (creditErr) {
-            console.error('Failed to fetch credits:', creditErr);
-            setCredits(0);
-          }
-
-          // 내 서재에서 최근 책 가져오기
-          try {
-            setIsLoadingRecent(true);
-            const libraryData = await libraryService.getMyLibrary(0, 5);
-            const bookLogs = await bookLogService.getMyBookLogs();
-
-            // BookLog로 마지막 열람 순 정렬
-            const sortedBooks = [...libraryData.content].sort((a, b) => {
-              const logA = bookLogs.find(log => log.libraryId === a.libraryId);
-              const logB = bookLogs.find(log => log.libraryId === b.libraryId);
-              const dateA = logA ? new Date(logA.readDate).getTime() : 0;
-              const dateB = logB ? new Date(logB.readDate).getTime() : 0;
-              return dateB - dateA;  // 최근순 정렬
-            });
-            setRecentBooks(sortedBooks.slice(0, 5));
-          } catch (libraryErr) {
-            console.error('Failed to fetch library:', libraryErr);
-            setRecentBooks([]);
-          } finally {
-            setIsLoadingRecent(false);
-          }
-        }
-
+        setTotalPages(booksResponse.totalPages);
         setError(null);
       } catch (err) {
-        console.error('Failed to fetch data:', err);
-        setError('데이터를 불러오는데 실패했습니다.');
+        console.error('Failed to fetch books:', err);
+        setError('도서 목록을 불러오는데 실패했습니다.');
         setBooks([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
+    fetchBooks();
+  }, [currentPage]);
+
+  // 레벨 및 크레딧 가져오기
+  useEffect(() => {
+    const fetchUserData = async () => {
+      // 레벨 데이터 가져오기
+      try {
+        const levelsData = await levelService.getAllLevels();
+        setLevels(levelsData);
+      } catch (levelErr) {
+        console.error('Failed to fetch levels:', levelErr);
+      }
+
+      // 크레딧 가져오기 (로그인된 경우에만)
+      if (user) {
+        try {
+          const creditBalance = await creditService.getMyBalance();
+          setCredits(creditBalance);
+        } catch (creditErr) {
+          console.error('Failed to fetch credits:', creditErr);
+          setCredits(0);
+        }
+      }
+    };
+
+    fetchUserData();
   }, [user]);
 
   return (
@@ -342,10 +344,10 @@ const MainPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-2 mb-2">
                   <div className="flex-1 exp-bar">
-                    <div className="exp-bar-fill" style={{ width: user ? `${Math.min((user.experience || 0) % 1000 / 10, 100)}%` : '0%' }} />
+                    <div className="exp-bar-fill" style={{ width: `${expProgress}%` }} />
                   </div>
                   <span className="text-sm font-bold text-emerald-600">
-                    {user ? `${user.experience || 0} EXP` : '0 EXP'}
+                    {user ? `${user.experience || 0}/${expNeeded}` : '0 EXP'}
                   </span>
                 </div>
                 <p className="text-green-700 text-sm flex items-center gap-1">
@@ -372,14 +374,14 @@ const MainPage: React.FC = () => {
             />
 
             {/* 메인 비주얼 (나무 & 캐릭터) */}
-            <div className="absolute bottom-0 right-0 w-full h-full flex items-end justify-end pr-4 pb-6 z-10">
+            <div className="absolute bottom-0 right-[-9%] w-full h-full flex items-end justify-end pr-0 pb-6 z-10">
 
               {/* 바닥 마법진 */}
               <div className="absolute bottom-8 right-[10%] w-[60%] h-24 bg-emerald-500/30 blur-3xl rounded-full animate-pulse-glow pointer-events-none" />
 
               {/* 캐릭터 */}
               <motion.div
-                className="absolute bottom-12 right-[35%] z-40 cursor-pointer"
+                className="absolute bottom-8 right-[40%] z-40 cursor-pointer"
                 animate={{ y: [0, -8, 0] }}
                 transition={{ duration: 3, repeat: Infinity }}
                 whileHover={{ scale: 1.1 }}
@@ -394,22 +396,25 @@ const MainPage: React.FC = () => {
                     <Sparkles size={14} className="text-amber-500" /> 오늘도 화이팅! 🌿
                   </span>
                 </motion.div>
-                <img src={character} alt="Character" className="w-32 md:w-40 drop-shadow-2xl" />
+                <img src={character} alt="Character" className="w-[180px] md:w-[320px] drop-shadow-2xl" />
               </motion.div>
 
               {/* 나무 */}
               <motion.div
-                className="relative z-20 flex flex-col items-center mr-4 md:mr-10"
+                className="relative z-20 flex flex-col items-center mr-[-50px] md:mr-[-100px]"
                 animate={{ y: [0, -5, 0] }}
                 transition={{ duration: 6, repeat: Infinity }}
               >
-                <img src={treeTrunk} alt="Trunk" className="w-40 md:w-52 z-20 -mb-6 drop-shadow-xl" />
-                <img src={treeBase} alt="Base" className="w-64 md:w-80 z-10 drop-shadow-xl" />
+                <img
+                  src={tree}
+                  alt="Tree"
+                  className="w-[280px] md:w-[360px] lg:w-[720px] drop-shadow-2xl filter brightness-105"
+                />
               </motion.div>
             </div>
           </motion.div>
 
-          {/* [우측 5칸] 마이 데이터 */}
+          {/* [우측 5칸] 마이 데이터 / 게스트 환영 */}
           <motion.div
             className="glass-panel lg:col-span-5 p-8 flex flex-col justify-between h-auto min-h-[480px] relative overflow-hidden"
             initial={{ opacity: 0, x: 30 }}
@@ -418,71 +423,168 @@ const MainPage: React.FC = () => {
           >
             <div className="absolute -top-20 -right-20 w-60 h-60 bg-green-100/50 rounded-full blur-3xl pointer-events-none" />
 
-            <div>
-              {/* 프로필 - 실제 유저 데이터 연동 */}
-              <UserProfileSection />
+            {user ? (
+              /* === 로그인 사용자 View === */
+              <>
+                <div>
+                  {/* 프로필 */}
+                  <UserProfileSection />
 
-              <div className="space-y-3 relative z-10">
-                {/* 경험치 바 */}
-                <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-100">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="flex items-center gap-2 font-bold text-emerald-900">
-                      <BookOpen size={20} className="text-emerald-500" /> 성장 진행도
-                    </span>
-                    <span className="text-sm font-bold text-emerald-600">
-                      {user ? `Lv.${user.levelId || 1} → Lv.${(user.levelId || 1) + 1}` : 'Lv.1 → Lv.2'}
-                    </span>
-                  </div>
-                  <div className="exp-bar">
-                    <motion.div
-                      className="exp-bar-fill"
-                      initial={{ width: 0 }}
-                      animate={{ width: user ? `${Math.min((user.experience || 0) % 1000 / 10, 100)}%` : '0%' }}
-                      transition={{ duration: 1, delay: 0.5 }}
+                  <div className="space-y-3 relative z-10">
+                    {/* 경험치 바 */}
+                    <div className="p-4 bg-emerald-50/80 rounded-2xl border border-emerald-100">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="flex items-center gap-2 font-bold text-emerald-900">
+                          <BookOpen size={20} className="text-emerald-500" /> 성장 진행도
+                        </span>
+                        <span className="text-sm font-bold text-emerald-600">
+                          Lv.{user.levelId || 1} → Lv.{(user.levelId || 1) + 1}
+                        </span>
+                      </div>
+                      <div className="exp-bar">
+                        <motion.div
+                          className="exp-bar-fill"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${expProgress}%` }}
+                          transition={{ duration: 1, delay: 0.5 }}
+                        />
+                      </div>
+                      <p className="text-xs text-emerald-600 mt-1.5">
+                        {user.experience || 0} / {expNeeded} EXP
+                      </p>
+                    </div>
+
+                    <StatBox
+                      icon={<Coins size={24} className="text-yellow-500" />}
+                      label="씨앗 포인트"
+                      value={`${credits.toLocaleString()} G`}
+                      trend="보유 포인트"
+                      highlight
+                    />
+                    <StatBox
+                      icon={<Book size={24} className="text-emerald-500" />}
+                      label="내 레벨"
+                      value={`Lv.${user.levelId || 1}`}
+                      trend={`${user.experience || 0} EXP`}
                     />
                   </div>
-                  <p className="text-xs text-emerald-600 mt-1.5">
-                    {user ? `${user.experience || 0} EXP` : '로그인 후 확인하세요'}
-                  </p>
                 </div>
 
-                <StatBox
-                  icon={<Coins size={24} className="text-yellow-500" />}
-                  label="씨앗 포인트"
-                  value={`${credits.toLocaleString()} G`}
-                  trend={user ? '보유 포인트' : '로그인 필요'}
-                  highlight
-                />
-                <StatBox
-                  icon={<Book size={24} className="text-emerald-500" />}
-                  label="내 레벨"
-                  value={user ? `Lv.${user.levelId || 1}` : 'Lv.1'}
-                  trend={user ? `${user.experience || 0} EXP` : '로그인 필요'}
-                />
-              </div>
-            </div>
+                {/* 버튼 그룹 */}
+                <div className="flex gap-3 mt-6 z-10">
+                  <motion.button
+                    onClick={() => navigate('/library')}
+                    className="btn-game flex-1 flex items-center justify-center gap-2 text-lg"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Book size={22} /> 내 서재
+                  </motion.button>
+                  <motion.button
+                    onClick={() => navigate('/tts-room')}
+                    className="flex-1 flex items-center justify-center gap-2 text-lg font-bold py-4 px-6 rounded-xl
+                               bg-gradient-to-r from-amber-500 to-orange-500 text-white
+                               shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Volume2 size={22} /> TTS룸
+                  </motion.button>
+                </div>
+              </>
+            ) : (
+              /* === 게스트 View === */
+              <div className="flex flex-col items-center justify-center h-full text-center relative z-10">
+                {/* 배경 장식 */}
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-50/50 via-transparent to-amber-50/50 rounded-2xl" />
 
-            {/* 버튼 그룹 */}
-            <div className="flex gap-3 mt-6 z-10">
-              <motion.button
-                onClick={() => navigate('/library')}
-                className="btn-game flex-1 flex items-center justify-center gap-2 text-lg"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Book size={22} /> 내 서재
-              </motion.button>
-              <motion.button
-                onClick={() => navigate('/tts-room')}
-                className="flex-1 flex items-center justify-center gap-2 text-lg font-bold py-4 px-6 rounded-xl
-                           bg-gradient-to-r from-amber-500 to-orange-500 text-white
-                           shadow-lg hover:shadow-xl hover:-translate-y-1 transition-all"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Volume2 size={22} /> TTS룸
-              </motion.button>
-            </div>
+                {/* 아이콘 */}
+                <motion.div
+                  className="relative mb-6"
+                  animate={{ y: [0, -8, 0] }}
+                  transition={{ duration: 3, repeat: Infinity }}
+                >
+                  <div className="w-24 h-24 bg-gradient-to-br from-emerald-400 to-green-500 rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-200">
+                    <TreeDeciduous size={48} className="text-white" />
+                  </div>
+                  <motion.div
+                    className="absolute -top-2 -right-2 w-8 h-8 bg-amber-400 rounded-full flex items-center justify-center shadow-lg"
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    <Sparkles size={16} className="text-white" />
+                  </motion.div>
+                </motion.div>
+
+                {/* 환영 메시지 */}
+                <h3 className="text-2xl font-extrabold text-gray-900 mb-2">
+                  나만의 독서 여정을 시작하세요
+                </h3>
+                <p className="text-gray-600 mb-6 max-w-xs">
+                  책을 읽고 경험치를 쌓아 나무를 성장시키세요!<br />
+                  <span className="text-emerald-600 font-semibold">TTS 기능</span>과 함께 더 편하게 읽어보세요.
+                </p>
+
+                {/* 혜택 리스트 */}
+                <div className="grid grid-cols-2 gap-3 mb-6 w-full max-w-sm">
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-3 border border-gray-100 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-8 h-8 bg-emerald-100 rounded-lg flex items-center justify-center">
+                        <Book size={16} className="text-emerald-600" />
+                      </div>
+                      <span className="font-bold text-gray-800 text-sm">내 서재</span>
+                    </div>
+                    <p className="text-xs text-gray-500">구매한 책을 관리하세요</p>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-3 border border-gray-100 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <Volume2 size={16} className="text-amber-600" />
+                      </div>
+                      <span className="font-bold text-gray-800 text-sm">TTS 청취</span>
+                    </div>
+                    <p className="text-xs text-gray-500">AI가 책을 읽어드려요</p>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-3 border border-gray-100 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                        <Coins size={16} className="text-yellow-600" />
+                      </div>
+                      <span className="font-bold text-gray-800 text-sm">씨앗 포인트</span>
+                    </div>
+                    <p className="text-xs text-gray-500">활동으로 포인트 적립</p>
+                  </div>
+                  <div className="bg-white/80 backdrop-blur rounded-xl p-3 border border-gray-100 text-left">
+                    <div className="flex items-center gap-2 mb-1">
+                      <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                        <Crown size={16} className="text-purple-600" />
+                      </div>
+                      <span className="font-bold text-gray-800 text-sm">레벨 시스템</span>
+                    </div>
+                    <p className="text-xs text-gray-500">독서로 성장하세요</p>
+                  </div>
+                </div>
+
+                {/* 버튼 */}
+                {/* 버튼 */}
+                <motion.button
+                  onClick={(e) => {
+                    console.log('Login button clicked');
+                    e.stopPropagation();
+                    navigate('/login');
+                  }}
+                  className="w-full max-w-sm py-4 px-6 rounded-xl font-bold text-lg
+                             bg-gradient-to-r from-emerald-500 to-green-500 text-white
+                             shadow-lg shadow-emerald-200 hover:shadow-xl hover:-translate-y-1 transition-all
+                             flex items-center justify-center gap-2 relative z-50 cursor-pointer"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <Sparkles size={20} />
+                  시작하기
+                </motion.button>
+              </div>
+            )}
           </motion.div>
         </div>
 
@@ -495,22 +597,22 @@ const MainPage: React.FC = () => {
         >
           <div className="flex justify-between items-end mb-6 px-2">
             <h3 className="game-title text-xl flex items-center gap-2">
-              📖 최근 열어본 책
+              📚 최근 등록된 책
               <span className="text-sm font-normal text-green-600 bg-green-50 px-3 py-1 rounded-full border border-green-100">
-                최근 5권
+                {currentPage + 1} / {totalPages || 1} 페이지
               </span>
             </h3>
             <motion.button
-              onClick={() => navigate('/library')}
+              onClick={() => navigate('/books')}
               className="text-sm font-bold text-emerald-600 hover:text-emerald-800 flex items-center bg-white px-4 py-2 rounded-xl border border-emerald-100 shadow-sm transition-all hover:shadow-md"
               whileHover={{ x: 3 }}
             >
-              전체 서재 보기 <ChevronRight size={16} className="ml-1" />
+              전체 도서 보기 <ChevronRight size={16} className="ml-1" />
             </motion.button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-5">
-            {isLoading || isLoadingRecent ? (
+            {isLoading ? (
               <div className="col-span-full flex items-center justify-center py-12">
                 <Loader className="w-8 h-8 animate-spin text-emerald-500" />
                 <span className="ml-3 text-gray-500">도서 목록 로딩 중...</span>
@@ -525,20 +627,7 @@ const MainPage: React.FC = () => {
                   다시 시도
                 </button>
               </div>
-            ) : user && recentBooks.length > 0 ? (
-              // 로그인 사용자: 내 서재의 최근 열어본 책
-              recentBooks.map((lib, idx) => (
-                <RecentBookCard
-                  key={lib.libraryId}
-                  index={idx}
-                  title={lib.bookTitle}
-                  author=""
-                  progress={lib.totalProgress || 0}
-                  onClick={() => navigate(`/reader/${lib.libraryId}/1`)}
-                />
-              ))
             ) : books.length > 0 ? (
-              // 비로그인 또는 서재 비어있음: 일반 도서 목록
               books.map((book, idx) => (
                 <RecentBookCard
                   key={book.bookId}
@@ -552,10 +641,41 @@ const MainPage: React.FC = () => {
             ) : (
               <div className="col-span-full text-center py-12 text-gray-500">
                 <BookOpen className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                <p>{user ? '아직 열어본 책이 없습니다.' : '등록된 도서가 없습니다.'}</p>
+                <p>등록된 도서가 없습니다.</p>
               </div>
             )}
           </div>
+
+          {/* 페이지네이션 */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center gap-4 mt-8">
+              <motion.button
+                onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                disabled={currentPage === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                whileHover={{ scale: currentPage === 0 ? 1 : 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <ChevronLeft size={18} />
+                이전
+              </motion.button>
+
+              <span className="text-gray-600 font-medium">
+                {currentPage + 1} / {totalPages}
+              </span>
+
+              <motion.button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
+                disabled={currentPage >= totalPages - 1}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 transition-colors"
+                whileHover={{ scale: currentPage >= totalPages - 1 ? 1 : 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                다음
+                <ChevronRight size={18} />
+              </motion.button>
+            </div>
+          )}
         </motion.section>
 
       </main>

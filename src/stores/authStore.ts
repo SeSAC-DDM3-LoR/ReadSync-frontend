@@ -85,14 +85,35 @@ export const useAuthStore = create<AuthState>()(
                     set({ isLoading: true });
                     const currentUser = get().user;
                     const profile = await authService.getCurrentUser();
+
+                    // 정지된 유저 체크
+                    if (profile.status === 'BANNED') {
+                        alert('현재 이용이 정지된 아이디입니다.\n고객센터로 문의 부탁드립니다.');
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                        set({ user: null, isAuthenticated: false, isLoading: false });
+                        window.location.href = '/login';
+                        return;
+                    }
+
+                    // 탈퇴한 유저 체크
+                    if (profile.status === 'WITHDRAWN') {
+                        alert('탈퇴한 계정입니다.\n새로운 계정으로 가입해 주세요.');
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                        set({ user: null, isAuthenticated: false, isLoading: false });
+                        window.location.href = '/login';
+                        return;
+                    }
+
                     set({
                         user: {
                             userId: profile.userId,
                             nickname: profile.nickname,
                             tag: profile.tag,
                             profileImage: profile.profileImage,
-                            role: profile.role || currentUser?.role || 'USER', // API 응답에서 role 가져오기, 없으면 기존 값 유지
-                            status: 'ACTIVE',
+                            role: profile.role || currentUser?.role || 'USER',
+                            status: profile.status || 'ACTIVE',
                             levelId: currentUser?.levelId || 1,
                             experience: profile.experience,
                             preferredGenre: profile.preferredGenre,

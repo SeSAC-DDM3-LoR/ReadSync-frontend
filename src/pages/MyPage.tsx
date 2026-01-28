@@ -13,6 +13,8 @@ import authService from '../services/authService';
 import { reviewService } from '../services/reviewService';
 import { commentService } from '../services/reviewService';
 import { expService, creditService } from '../services/userService';
+import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
+import type { Level } from '../services/levelService';
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
 import { GENRES, getGenreLabels } from '../constants/genres';
@@ -369,6 +371,27 @@ const EditProfileModal: React.FC<{
 
 // 프로필 섹션
 const ProfileSection: React.FC<{ user: any; onEdit: () => void }> = ({ user, onEdit }) => {
+    const [levels, setLevels] = useState<Level[]>([]);
+
+    useEffect(() => {
+        const loadLevels = async () => {
+            try {
+                const data = await levelService.getAllLevels();
+                setLevels(data);
+            } catch (err) {
+                console.error('Failed to load levels:', err);
+            }
+        };
+        loadLevels();
+    }, []);
+
+    const expProgress = levels.length > 0
+        ? getExpProgress(user.experience || 0, user.levelId || 1, levels)
+        : 0;
+    const expNeeded = levels.length > 0
+        ? getExpNeededForNextLevel(user.levelId || 1, levels)
+        : 100;
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -386,9 +409,24 @@ const ProfileSection: React.FC<{ user: any; onEdit: () => void }> = ({ user, onE
                         <label className="block text-sm font-bold text-gray-600 mb-2">레벨</label>
                         <p className="text-lg text-gray-900 font-medium">Lv.{user.levelId || 1}</p>
                     </div>
-                    <div>
+                    <div className="md:col-span-2">
                         <label className="block text-sm font-bold text-gray-600 mb-2">경험치</label>
-                        <p className="text-lg text-gray-900 font-medium">{user.experience || 0} EXP</p>
+                        <div className="flex items-center gap-3">
+                            <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                                <motion.div
+                                    className="h-full bg-gradient-to-r from-emerald-400 to-green-500"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${expProgress}%` }}
+                                    transition={{ duration: 0.8 }}
+                                />
+                            </div>
+                            <span className="text-sm font-bold text-emerald-600 min-w-[80px] text-right">
+                                {user.experience || 0} / {expNeeded}
+                            </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1">
+                            Lv.{user.levelId || 1} → Lv.{(user.levelId || 1) + 1} 진행률: {expProgress.toFixed(1)}%
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-gray-600 mb-2">선호 장르</label>
