@@ -9,12 +9,12 @@ import {
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { bookService } from '../services/bookService';
-import { chapterService, libraryService } from '../services/libraryService';
+import { chapterService, type Chapter } from '../services/readerService';
+import { libraryService } from '../services/libraryService';
 import { reviewService } from '../services/reviewService';
 import { cartService } from '../services/cartService';
 import useAuthStore from '../stores/authStore';
 import type { Book } from '../services/bookService';
-import type { Chapter } from '../services/libraryService';
 import type { Review } from '../services/reviewService';
 import UserProfilePopup from '../components/UserProfilePopup';
 
