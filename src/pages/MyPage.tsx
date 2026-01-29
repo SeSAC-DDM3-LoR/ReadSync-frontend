@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, BookOpen, Star, Coins, LogOut,
     Edit2, Loader2, MessageSquare, Heart, Zap,
-    X, Camera, Check
+    X, Camera, Check, CreditCard, Crown
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -15,6 +15,7 @@ import { commentService } from '../services/reviewService';
 import { expService, creditService } from '../services/userService';
 import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
 import type { Level } from '../services/levelService';
+import { subscriptionService, type Subscription } from '../services/subscriptionService';
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
 import { GENRES, getGenreLabels } from '../constants/genres';
@@ -37,6 +38,7 @@ const MyPage: React.FC = () => {
 
     const menuItems = [
         { path: '/mypage', label: '프로필', icon: User },
+        { path: '/mypage/subscription', label: '구독 관리', icon: Crown },
         { path: '/mypage/reviews', label: '내 리뷰', icon: Star },
         { path: '/mypage/comments', label: '내 댓글', icon: MessageSquare },
         { path: '/mypage/exp', label: '경험치 내역', icon: Zap },
@@ -70,7 +72,7 @@ const MyPage: React.FC = () => {
                                         {user.profileImage ? (
                                             <img src={user.profileImage} alt={user.nickname} className="w-full h-full object-cover" />
                                         ) : (
-                                            <span className="text-3xl text-white font-bold">{user.nickname?.charAt(0)}</span>
+                                            <span className="text-3xl text-white font-bold">{user.nickname?.charAt(0) || 'U'}</span>
                                         )}
                                         {/* Quick Edit Button Overlay */}
                                         <button
@@ -126,6 +128,7 @@ const MyPage: React.FC = () => {
                                     onEdit={() => setIsEditModalOpen(true)}
                                 />
                             )}
+                            {currentPath === '/mypage/subscription' && <SubscriptionSection />}
                             {currentPath === '/mypage/reviews' && <MyReviewsSection />}
                             {currentPath === '/mypage/comments' && <MyCommentsSection />}
                             {currentPath === '/mypage/exp' && <ExpLogSection />}
@@ -235,7 +238,7 @@ const EditProfileModal: React.FC<{
                 profileImage: finalImageUrl || undefined
             };
 
-            const updatedUser = await authService.updateProfile(updatePayload);
+            await authService.updateProfile(updatePayload);
 
             // 3. Update Store & Close
             onUpdate({
@@ -649,5 +652,167 @@ const CreditsSection: React.FC = () => {
         </motion.div>
     );
 };
+
+// 구독 관리 섹션
+const SubscriptionSection: React.FC = () => {
+    const navigate = useNavigate();
+    const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isCancelling, setIsCancelling] = useState(false);
+
+    useEffect(() => {
+        loadSubscription();
+    }, []);
+
+    const loadSubscription = async () => {
+        try {
+            const data = await subscriptionService.getMySubscription();
+            setSubscription(data);
+        } catch (error) {
+            console.error('Failed to load subscription:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCancel = async () => {
+        if (!subscription) return;
+        if (!confirm('정말로 구독을 해지하시겠습니까? 다음 결제일부터 청구되지 않습니다.')) return;
+
+        setIsCancelling(true);
+        try {
+            await subscriptionService.cancelSubscription(subscription.subId);
+            await loadSubscription();
+            alert('구독이 성공적으로 해지되었습니다.');
+        } catch (error: any) {
+            console.error('Cancel subscription failed:', error);
+            alert(error.response?.data?.message || '구독 해지 중 오류가 발생했습니다.');
+        } finally {
+            setIsCancelling(false);
+        }
+    };
+
+    const getStatusBadge = (status: string) => {
+        const statusConfig: Record<string, { text: string; className: string }> = {
+            ACTIVE: { text: '활성', className: 'bg-emerald-100 text-emerald-700' },
+            CANCELLED: { text: '해지됨', className: 'bg-gray-100 text-gray-700' },
+            PENDING: { text: '대기 중', className: 'bg-yellow-100 text-yellow-700' },
+            EXPIRED: { text: '만료됨', className: 'bg-red-100 text-red-700' },
+            PAYMENT_FAILED: { text: '결제 실패', className: 'bg-red-100 text-red-700' },
+        };
+
+        const config = statusConfig[status] || { text: status, className: 'bg-gray-100 text-gray-700' };
+        return (
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.className}`}>
+                {config.text}
+            </span>
+        );
+    };
+
+    if (isLoading) {
+        return <div className="flex justify-center py-12"><Loader2 size={32} className="text-emerald-500 animate-spin" /></div>;
+    }
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-6">구독 관리</h2>
+
+            {subscription ? (
+                <div className="space-y-6">
+                    {/* 현재 구독 정보 */}
+                    <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-3xl p-8 text-white">
+                        <div className="flex items-start justify-between mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="p-4 bg-white/20 rounded-2xl">
+                                    <Crown size={32} />
+                                </div>
+                                <div>
+                                    <p className="text-emerald-100 text-sm mb-1">현재 플랜</p>
+                                    <h3 className="text-3xl font-bold">{subscription.planName}</h3>
+                                </div>
+                            </div>
+                            {getStatusBadge(subscription.status)}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-6 bg-white/10 rounded-2xl p-6">
+                            <div>
+                                <p className="text-emerald-100 text-sm mb-1">월 요금</p>
+                                <p className="text-2xl font-bold">{subscription.price.toLocaleString()}원</p>
+                            </div>
+                            <div>
+                                <p className="text-emerald-100 text-sm mb-1">다음 결제일</p>
+                                <p className="text-2xl font-bold">
+                                    {new Date(subscription.nextBillingDate).toLocaleDateString('ko-KR')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-emerald-100 text-sm mb-1">구독 시작일</p>
+                                <p className="text-lg font-medium">
+                                    {new Date(subscription.startedAt).toLocaleDateString('ko-KR')}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-emerald-100 text-sm mb-1">구독 상태</p>
+                                <p className="text-lg font-medium">{subscription.status}</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 관리 옵션 */}
+                    <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm">
+                        <h4 className="text-lg font-bold text-gray-900 mb-4">구독 관리 옵션</h4>
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => navigate('/subscription')}
+                                className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:bg-gray-50 transition-colors"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <CreditCard size={20} className="text-emerald-600" />
+                                    <span className="font-medium text-gray-700">플랜 변경하기</span>
+                                </div>
+                                <span className="text-gray-400">→</span>
+                            </button>
+
+                            {subscription.status === 'ACTIVE' && (
+                                <button
+                                    onClick={handleCancel}
+                                    disabled={isCancelling}
+                                    className="w-full flex items-center justify-between p-4 rounded-xl border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <X size={20} className="text-red-600" />
+                                        <span className="font-medium text-red-700">
+                                            {isCancelling ? '처리 중...' : '구독 해지하기'}
+                                        </span>
+                                    </div>
+                                    {isCancelling && <Loader2 size={18} className="text-red-600 animate-spin" />}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                /* 구독 없음 상태 */
+                <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+                    <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-100 to-green-100 rounded-full flex items-center justify-center">
+                        <Crown size={32} className="text-emerald-600" />
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-2">활성화된 구독이 없습니다</h3>
+                    <p className="text-gray-600 mb-8">
+                        프리미엄 플랜을 구독하고 모든 기능을 무제한으로 이용해보세요!
+                    </p>
+                    <button
+                        onClick={() => navigate('/subscription')}
+                        className="px-8 py-4 bg-gradient-to-r from-emerald-500 to-green-500 text-white font-bold rounded-xl hover:shadow-lg transition-all inline-flex items-center gap-2"
+                    >
+                        <Crown size={20} />
+                        구독 플랜 보기
+                    </button>
+                </div>
+            )}
+        </motion.div>
+    );
+};
+
 
 export default MyPage;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Crown, Check, Sparkles, Zap, Star, ArrowLeft,
@@ -8,19 +8,76 @@ import {
 import useAuthStore from '../stores/authStore';
 import { subscriptionService, type SubscriptionPlan, type Subscription } from '../services/subscriptionService';
 
+// Toss Payments SDK 타입 정의 (any 타입으로 단순화)
+declare const TossPayments: any;
+
+// Toss Payments SDK 로드 함수
+const loadTossPayments = (): Promise<any> => {
+    return new Promise((resolve, reject) => {
+        if (window.TossPayments) {
+            resolve(window.TossPayments);
+            return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://js.tosspayments.com/v1/payment';
+        script.onload = () => resolve(window.TossPayments);
+        script.onerror = () => reject(new Error('Toss Payments SDK 로드 실패'));
+        document.head.appendChild(script);
+    });
+};
+
 const SubscriptionStorePage: React.FC = () => {
     const navigate = useNavigate();
-    const { isAuthenticated, user } = useAuthStore();
+    const location = useLocation();
+    const { isAuthenticated } = useAuthStore();
     const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
     const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isBillingKeyRegistered, setIsBillingKeyRegistered] = useState(false);
+    const [billingKeyStatus, setBillingKeyStatus] = useState<'idle' | 'success' | 'error'>('idle');
+    const [errorMessage, setErrorMessage] = useState<string>('');
 
     useEffect(() => {
         loadData();
+        // 빌링키 발급 리다이렉트 처리
+        processBillingKeyRedirect();
     }, []);
+
+    // URL 파라미터로부터 빌링키 발급 결과 처리
+    const processBillingKeyRedirect = async () => {
+        const params = new URLSearchParams(location.search);
+
+        // 빌링키 발급 성공
+        if (params.has('authKey') && params.has('customerKey')) {
+            setIsProcessing(true);
+            try {
+                await subscriptionService.registerBillingKey({
+                    authKey: params.get('authKey')!,
+                    customerKey: params.get('customerKey')!,
+                });
+                setIsBillingKeyRegistered(true);
+                setBillingKeyStatus('success');
+                // URL 파라미터 제거
+                window.history.replaceState({}, '', location.pathname);
+            } catch (error: any) {
+                console.error('빌링키 등록 실패:', error);
+                setBillingKeyStatus('error');
+                setErrorMessage(error.response?.data?.message || '카드 등록에 실패했습니다.');
+            } finally {
+                setIsProcessing(false);
+            }
+        }
+        // 빌링키 발급 실패
+        else if (params.has('code')) {
+            setBillingKeyStatus('error');
+            setErrorMessage(params.get('message') || '카드 등록에 실패했습니다.');
+            window.history.replaceState({}, '', location.pathname);
+        }
+    };
 
     const loadData = async () => {
         try {
@@ -37,6 +94,30 @@ const SubscriptionStorePage: React.FC = () => {
         }
     };
 
+    // 카드 등록 (빌링키 발급)
+    const handleCardRegistration = async () => {
+        if (!isAuthenticated) {
+            navigate('/login', { state: { from: '/subscription' } });
+            return;
+        }
+
+        try {
+            const TossPayments = await loadTossPayments();
+            const clientKey = 'test_ck_eqRGgYO1r54g5P1wnlY5VQnN2Eya'; // 테스트 클라이언트 키
+            const tossPayments = TossPayments(clientKey);
+            const customerKey = `CUST_${Date.now()}`;
+
+            await tossPayments.requestBillingAuth('카드', {
+                customerKey,
+                successUrl: `${window.location.origin}${location.pathname}`,
+                failUrl: `${window.location.origin}${location.pathname}`,
+            });
+        } catch (error: any) {
+            console.error('빌링키 발급 요청 실패:', error);
+            alert('카드 등록 요청에 실패했습니다. 다시 시도해주세요.');
+        }
+    };
+
     const handleSelectPlan = (plan: SubscriptionPlan) => {
         if (!isAuthenticated) {
             navigate('/login', { state: { from: '/subscription' } });
@@ -49,15 +130,24 @@ const SubscriptionStorePage: React.FC = () => {
 
     const handleSubscribe = async () => {
         if (!selectedPlan) return;
+
+        // 빌링키 등록 확인
+        if (!isBillingKeyRegistered) {
+            alert('먼저 결제 카드를 등록해주세요.');
+            setShowPaymentModal(false);
+            return;
+        }
+
         setIsProcessing(true);
         try {
             await subscriptionService.subscribe(selectedPlan.planId);
             await loadData(); // Refresh data
             setShowPaymentModal(false);
             alert('구독이 완료되었습니다!');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Subscription failed:', error);
-            alert('구독 처리 중 오류가 발생했습니다.');
+            const errorMsg = error.response?.data?.message || '구독 처리 중 오류가 발생했습니다.';
+            alert(errorMsg);
         } finally {
             setIsProcessing(false);
         }
@@ -68,7 +158,7 @@ const SubscriptionStorePage: React.FC = () => {
         if (!confirm('정말로 구독을 해지하시겠습니까? 다음 결제일부터 청구되지 않습니다.')) return;
 
         try {
-            await subscriptionService.cancelSubscription(currentSubscription.subscriptionId);
+            await subscriptionService.cancelSubscription(currentSubscription.subId);
             await loadData();
             alert('구독이 해지되었습니다.');
         } catch (error) {
@@ -127,6 +217,77 @@ const SubscriptionStorePage: React.FC = () => {
             </header>
 
             <main className="max-w-6xl mx-auto px-4 py-12">
+                {/* 빌링키 등록 섹션 */}
+                {!isBillingKeyRegistered && !currentSubscription && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 p-6 bg-gradient-to-r from-amber-50 to-yellow-50 rounded-3xl border border-amber-200"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="p-3 bg-amber-100 rounded-xl">
+                                    <CreditCard size={24} className="text-amber-600" />
+                                </div>
+                                <div>
+                                    <p className="text-amber-900 font-bold text-lg">결제 카드 등록 필요</p>
+                                    <p className="text-amber-700 text-sm">구독을 시작하려면 먼저 결제 카드를 등록해주세요.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCardRegistration}
+                                disabled={isProcessing}
+                                className="px-6 py-3 bg-gradient-to-r from-amber-500 to-yellow-500 text-white font-bold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                            >
+                                {isProcessing ? (
+                                    <>
+                                        <Loader2 size={18} className="animate-spin" />
+                                        처리 중...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CreditCard size={18} />
+                                        카드 등록하기
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* 빌링키 등록 성공 메시지 */}
+                {billingKeyStatus === 'success' && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="mb-8 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center gap-3"
+                    >
+                        <Check size={24} className="text-green-600" />
+                        <p className="text-green-800 font-medium">카드가 성공적으로 등록되었습니다! 이제 원하는 플랜을 선택해주세요.</p>
+                    </motion.div>
+                )}
+
+                {/* 빌링키 등록 실패 메시지 */}
+                {billingKeyStatus === 'error' && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="mb-8 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3"
+                    >
+                        <X size={24} className="text-red-600" />
+                        <div className="flex-1">
+                            <p className="text-red-800 font-medium">카드 등록에 실패했습니다</p>
+                            <p className="text-red-600 text-sm">{errorMessage}</p>
+                        </div>
+                        <button
+                            onClick={() => setBillingKeyStatus('idle')}
+                            className="text-red-600 hover:text-red-700"
+                        >
+                            <X size={18} />
+                        </button>
+                    </motion.div>
+                )}
+
                 {/* 타이틀 섹션 */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -169,7 +330,7 @@ const SubscriptionStorePage: React.FC = () => {
                             <div className="text-right">
                                 <p className="text-emerald-100 text-sm">다음 결제일</p>
                                 <p className="font-bold">
-                                    {new Date(currentSubscription.endDate).toLocaleDateString('ko-KR')}
+                                    {new Date(currentSubscription.nextBillingDate).toLocaleDateString('ko-KR')}
                                 </p>
                             </div>
                             <button
@@ -235,12 +396,12 @@ const SubscriptionStorePage: React.FC = () => {
                                     onClick={() => handleSelectPlan(plan)}
                                     disabled={isCurrentPlan || plan.price === 0}
                                     className={`w-full py-3 rounded-xl font-bold transition-all ${isCurrentPlan
-                                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                                            : plan.price === 0
-                                                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                                : isPopular
-                                                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:shadow-lg hover:-translate-y-0.5'
-                                                    : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:shadow-lg hover:-translate-y-0.5'
+                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                        : plan.price === 0
+                                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                            : isPopular
+                                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:shadow-lg hover:-translate-y-0.5'
+                                                : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:shadow-lg hover:-translate-y-0.5'
                                         }`}
                                 >
                                     {isCurrentPlan ? '현재 이용 중' : plan.price === 0 ? '기본 플랜' : '구독하기'}

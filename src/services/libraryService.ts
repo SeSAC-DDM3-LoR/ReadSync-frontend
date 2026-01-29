@@ -14,6 +14,8 @@ export interface Library {
     readingStatus: 'BEFORE_READING' | 'READING' | 'COMPLETED';
     expiresAt: string | null;
     createdAt: string;
+    // 추가: 마지막으로 읽은 챕터 ID (읽기 이어가기용)
+    lastReadChapterId?: number;
 }
 
 export interface LibraryRequest {
@@ -35,16 +37,6 @@ export interface BookmarkRequest {
     chapterId: number;
     lastReadPos: number;
     readParagraphIndices?: number[];
-}
-
-export interface Chapter {
-    chapterId: number;
-    bookId: number;
-    chapterName: string;
-    sequence: number;
-    bookContentPath: string;
-    bookContent: any;
-    paragraphs: number;
 }
 
 // ==================== Library Service ====================
@@ -76,26 +68,10 @@ export const libraryService = {
     removeFromLibrary: async (libraryId: number): Promise<void> => {
         await api.delete(`/v1/my-library/${libraryId}`);
     },
-};
 
-// ==================== Chapter Service ====================
-
-export const chapterService = {
-    // 책의 챕터 목록 조회
-    getChaptersByBook: async (bookId: number): Promise<Chapter[]> => {
-        const response = await api.get<Chapter[]>(`/v1/chapters/book/${bookId}`);
-        return response.data;
-    },
-
-    // 챕터 상세 조회 (본문 포함)
-    getChapter: async (chapterId: number): Promise<Chapter> => {
-        const response = await api.get<Chapter>(`/v1/chapters/${chapterId}`);
-        return response.data;
-    },
-
-    // 챕터 URL 조회 (본문 미포함)
-    getChapterUrl: async (chapterId: number): Promise<Chapter> => {
-        const response = await api.get<Chapter>(`/v1/chapters/${chapterId}/url`);
+    // 서재 단건 조회 (libraryId로)
+    getLibraryById: async (libraryId: number): Promise<Library> => {
+        const response = await api.get<Library>(`/v1/my-library/${libraryId}`);
         return response.data;
     },
 };
@@ -120,6 +96,16 @@ export const bookmarkService = {
     // 북마크 삭제
     deleteBookmark: async (bookmarkId: number): Promise<void> => {
         await api.delete(`/v1/bookmarks/${bookmarkId}`);
+    },
+
+    // 특정 라이브러리의 북마크 조회
+    getBookmarkByLibrary: async (libraryId: number): Promise<Bookmark | null> => {
+        try {
+            const response = await api.get<Bookmark>(`/v1/bookmarks/library/${libraryId}`);
+            return response.data;
+        } catch {
+            return null;
+        }
     },
 };
 

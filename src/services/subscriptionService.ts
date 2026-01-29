@@ -11,15 +11,20 @@ export interface SubscriptionPlan {
     features: string[];
 }
 
+// 빌링키 등록 요청
+export interface BillingKeyRequest {
+    authKey: string;
+    customerKey: string;
+}
+
+// 구독 정보 응답 (백엔드 SubscriptionResponse와 일치)
 export interface Subscription {
-    subscriptionId: number;
-    userId: number;
-    planId: number;
+    subId: number;
     planName: string;
-    status: 'ACTIVE' | 'CANCELLED' | 'EXPIRED';
-    startDate: string;
-    endDate: string;
-    autoRenew: boolean;
+    price: number;
+    status: 'ACTIVE' | 'CANCELLED' | 'PENDING' | 'EXPIRED' | 'PAYMENT_FAILED';
+    nextBillingDate: string; // ISO datetime
+    startedAt: string; // ISO datetime
 }
 
 // ==================== Subscription Service ====================
@@ -93,9 +98,14 @@ export const subscriptionService = {
         }
     },
 
+    // 빌링키 등록
+    registerBillingKey: async (request: BillingKeyRequest): Promise<void> => {
+        await api.post('/v1/payments/billing-key', request);
+    },
+
     // 구독 해지
-    cancelSubscription: async (subscriptionId: number): Promise<void> => {
-        await api.delete(`/v1/subscriptions/${subscriptionId}`);
+    cancelSubscription: async (subId: number): Promise<void> => {
+        await api.delete(`/v1/subscriptions/${subId}`);
     },
 };
 
