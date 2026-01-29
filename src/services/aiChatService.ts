@@ -32,8 +32,9 @@ export interface ChatRoomResponse {
  * AI 채팅 메시지 요청 DTO
  */
 export interface ChatMessageRequest {
-    userMsg: string;          // 사용자 메시지
+    userMessage: string;          // 사용자 메시지
     chatType?: ChatType;      // 채팅 타입 (기본값: CHAT)
+    currentParagraphId?: string; // 현재 읽고 있는 문단 ID (Context용)
 }
 
 /**
@@ -43,12 +44,13 @@ export interface ChatMessageResponse {
     chatId: number;           // 메시지 ID
     roomId: number;           // 채팅방 ID
     chatType: ChatType;       // 채팅 타입
-    userMsg: string;          // 사용자 메시지
-    aiMsg: string;            // AI 응답 메시지
+    userMessage: string;          // 사용자 메시지
+    aiMessage: string;            // AI 응답 메시지
     tokenCount: number;       // 사용된 토큰 수
     responseTimeMs: number;   // 응답 시간 (밀리초)
     rating: number | null;    // AI 응답 평점 (1~5)
     createdAt: string;        // 생성일시
+    relatedParagraphId?: string; // 출처 문단 ID
 }
 
 /**
@@ -60,6 +62,7 @@ export interface ChatMessage {
     content: string;
     timestamp?: string;
     isLoading?: boolean;      // AI 응답 대기 중 여부
+    relatedParagraphId?: string; // 출처 문단 ID
 }
 
 // ==================== AI Chat Service ====================
@@ -270,7 +273,7 @@ export const convertToUIMessages = (responses: ChatMessageResponse[]): ChatMessa
         messages.push({
             id: response.chatId,
             role: 'user',
-            content: response.userMsg,
+            content: response.userMessage,
             timestamp: response.createdAt,
         });
 
@@ -278,8 +281,9 @@ export const convertToUIMessages = (responses: ChatMessageResponse[]): ChatMessa
         messages.push({
             id: response.chatId,
             role: 'ai',
-            content: response.aiMsg,
+            content: response.aiMessage,
             timestamp: response.createdAt,
+            relatedParagraphId: response.relatedParagraphId,
         });
     });
 

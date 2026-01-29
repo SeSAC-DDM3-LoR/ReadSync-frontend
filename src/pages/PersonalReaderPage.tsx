@@ -135,10 +135,103 @@ const PersonalReaderPage: React.FC = () => {
     const [textSelection, setTextSelection] = useState<TextSelection | null>(null);
 
     // 댓글
+    // 댓글
     const [comments, setComments] = useState<CommentResponse[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSpoiler, setIsSpoiler] = useState(false);
     const [isCommentLoading, setIsCommentLoading] = useState(false);
+
+    // AI 채팅: 출처 문단 클릭 핸들러
+    const handleNavigateToParagraph = useCallback((paragraphId: string) => {
+        if (!pages || pages.length === 0) return;
+
+        // 해당 문단이 포함된 페이지 찾기
+        const targetPageIndex = pages.findIndex(page =>
+            page.items.some(item => item.originalId === paragraphId || item.id === paragraphId)
+        );
+
+        if (targetPageIndex !== -1) {
+            setCurrentPage(targetPageIndex);
+            // 모바일 등에서 사이드바 닫기 (선택 사항)
+            // setShowRightSidebar(false); 
+            console.log(`Navigated to page ${targetPageIndex + 1} for paragraph ${paragraphId}`);
+        } else {
+            console.warn(`Paragraph ${paragraphId} not found in pages.`);
+        }
+    }, [pages]);
+
+    // AI 메시지 전송
+    const handleAiSend = async () => {
+        if (!aiInput.trim()) return;
+
+        let currentRoom: ChatRoomResponse | null | undefined = chatRoom;
+
+        // 채팅방이 없으면 생성 시도
+        if (!currentRoom) {
+            const newRoom = await initChatRoom();
+            if (newRoom) {
+                currentRoom = newRoom;
+            } else {
+                console.error("채팅방 생성 실패: 초기화 불가");
+                alert("채팅방을 생성할 수 없습니다. 잠시 후 다시 시도해주세요.");
+                return;
+            }
+        }
+
+        // 방어 코드: 여전히 방이 없거나 ID가 없으면 중단
+        if (!currentRoom || !currentRoom.roomId) {
+            console.error("채팅방 정보 누락");
+            return;
+        }
+
+        const userMsg = aiInput;
+        setAiInput(''); // 입력창 초기화
+        setIsAiLoading(true);
+
+        // UI에 즉시 표시
+        const tempUserChat: ChatMessage = {
+            id: Date.now(), // 임시 ID
+            role: 'user',
+            content: userMsg,
+            timestamp: new Date().toISOString()
+        };
+        setAiMessages(prev => [...prev, tempUserChat]);
+
+        try {
+            // 현재 페이지의 대표 문단 ID 추출 (첫 번째 문단의 원본 ID)
+            let currentParagraphId = undefined;
+            if (pages && pages[currentPage] && pages[currentPage].items.length > 0) {
+                currentParagraphId = pages[currentPage].items[0].originalId;
+            }
+
+            // 수정된 로직: currentRoom.roomId 사용 (chatRoom 상태 대신)
+            const response = await aiChatService.sendMessage(currentRoom.roomId, {
+                userMessage: userMsg, // userMsg 변수명 일치
+                currentParagraphId
+            });
+
+            // AI 응답 추가
+            const aiChat: ChatMessage = {
+                id: response.chatId,
+                role: 'ai',
+                content: response.aiMessage, // aiMessage 변수명 일치
+                timestamp: response.createdAt,
+                relatedParagraphId: (response as any).relatedParagraphId
+            };
+
+            setAiMessages(prev => [...prev, aiChat]);
+
+        } catch (error) {
+            console.error('메시지 전송 실패:', error);
+            setAiMessages(prev => [...prev, {
+                role: 'ai', // role 필드 필수
+                content: '죄송합니다. 오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
+                timestamp: new Date().toISOString() // timestamp 추가
+            }]);
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
 
     // ==================== Effects ====================
 
@@ -327,8 +420,12 @@ const PersonalReaderPage: React.FC = () => {
     /**
      * AI 채팅방 초기화/조회
      */
-    const initChatRoom = async () => {
-        if (!chapterId || chatRoom) return;
+
+    const initChatRoom = async (): Promise<ChatRoomResponse | null> => {
+        if (!chapterId) return null;
+
+        // 이미 방이 있으면 반환
+        if (chatRoom) return chatRoom;
 
         try {
             const room = await aiChatService.createChatRoom({
@@ -340,8 +437,11 @@ const PersonalReaderPage: React.FC = () => {
             // 채팅 기록 로드
             const history = await aiChatService.getChatHistory(room.roomId);
             setAiMessages(convertToUIMessages(history));
+
+            return room;
         } catch (error) {
             console.error('채팅방 초기화 실패:', error);
+            return null;
         }
     };
 
@@ -946,45 +1046,7 @@ const PersonalReaderPage: React.FC = () => {
 
     // ==================== AI Chat ====================
 
-    const handleAiSend = async () => {
-        if (!aiInput.trim()) return;
 
-        // 채팅방이 없으면 생성
-        if (!chatRoom) {
-            await initChatRoom();
-        }
-
-        const userMessage = aiInput;
-        setAiMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setAiInput('');
-        setIsAiLoading(true);
-
-        try {
-            if (chatRoom) {
-                const response = await aiChatService.sendMessage(chatRoom.roomId, {
-                    userMsg: userMessage,
-                    chatType: 'CHAT',
-                });
-                setAiMessages(prev => [...prev, { role: 'ai', content: response.aiMsg }]);
-            } else {
-                // 채팅방 없을 경우 시뮬레이션
-                setTimeout(() => {
-                    setAiMessages(prev => [...prev, {
-                        role: 'ai',
-                        content: `"${userMessage}"에 대한 답변입니다. AI 서버 연동 후 실제 응답이 표시됩니다.`
-                    }]);
-                }, 1000);
-            }
-        } catch (error) {
-            console.error('AI 응답 실패:', error);
-            setAiMessages(prev => [...prev, {
-                role: 'ai',
-                content: 'AI 응답을 받는데 실패했습니다. 잠시 후 다시 시도해주세요.'
-            }]);
-        } finally {
-            setIsAiLoading(false);
-        }
-    };
 
     // ==================== Comments ====================
 
@@ -1264,14 +1326,27 @@ const PersonalReaderPage: React.FC = () => {
                                         ) : (
                                             aiMessages.map((msg, idx) => (
                                                 <div
-                                                    key={idx}
-                                                    className={`p-3 rounded-lg text-sm ${msg.role === 'user'
-                                                        ? 'bg-emerald-500 text-white ml-8'
-                                                        : 'bg-gray-100 mr-8'
-                                                        }`}
-                                                    style={msg.role === 'ai' ? { backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#F5F5F5' } : {}}
+                                                    key={msg.id || idx}
+                                                    className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                                                 >
-                                                    {msg.content}
+                                                    <div
+                                                        className={`p-3 rounded-lg text-sm max-w-[90%] ${msg.role === 'user'
+                                                            ? 'bg-emerald-500 text-white rounded-br-none'
+                                                            : (theme.name === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800') + ' rounded-bl-none'
+                                                            }`}
+                                                    >
+                                                        {msg.content}
+                                                    </div>
+                                                    {/* 출처 표시 */}
+                                                    {msg.relatedParagraphId && (
+                                                        <button
+                                                            onClick={() => handleNavigateToParagraph(msg.relatedParagraphId!)}
+                                                            className="mt-1 text-xs text-blue-500 hover:underline flex items-center gap-1 self-start ml-1"
+                                                        >
+                                                            <span>📄</span>
+                                                            관련 문단으로 이동
+                                                        </button>
+                                                    )}
                                                 </div>
                                             ))
                                         )}
