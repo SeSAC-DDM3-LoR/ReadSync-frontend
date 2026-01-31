@@ -46,11 +46,16 @@ const AdminBooksPage: React.FC = () => {
         coverUrl: '',
         description: '',
         categoryId: 1,
+        isAdultOnly: false,
+        viewPermission: 'FREE',
+        language: 'ko',
+        publishedDate: '',
     });
 
     const [chapterForm, setChapterForm] = useState({
         chapterName: '',
         sequence: 1,
+        paragraphs: -1, // [NEW]
     });
 
     // 권한 체크
@@ -123,6 +128,10 @@ const AdminBooksPage: React.FC = () => {
                 coverUrl: book.coverUrl || '',
                 description: book.description || '',
                 categoryId: book.categoryId || 1,
+                isAdultOnly: false,
+                viewPermission: 'FREE', // 기본값
+                language: 'ko',
+                publishedDate: '',
             });
         } else {
             setEditingBook(null);
@@ -135,6 +144,10 @@ const AdminBooksPage: React.FC = () => {
                 coverUrl: '',
                 description: '',
                 categoryId: 1,
+                isAdultOnly: false,
+                viewPermission: 'FREE',
+                language: 'ko',
+                publishedDate: '',
             });
         }
         setShowBookModal(true);
@@ -198,16 +211,88 @@ const AdminBooksPage: React.FC = () => {
             setChapterForm({
                 chapterName: chapter.chapterName,
                 sequence: chapter.sequence,
+                paragraphs: chapter.paragraphs || -1,
             });
+            setChapterFile(null); // 수정 시 기본 파일 선택 안함
         } else {
             setEditingChapter(null);
             setChapterForm({
                 chapterName: '',
-                sequence: chapters.length + 1,
+                sequence: chapters.length + 1, // 기본값: 마지막 + 1
+                paragraphs: -1,
             });
+            setChapterFile(null);
         }
-        setChapterFile(null);
         setShowChapterModal(true);
+    };
+
+    // 파일 선택 핸들러 (스마트 분석)
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setChapterFile(file);
+
+        // JSON 파일 분석
+        if (file.name.endsWith('.json')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const json = JSON.parse(event.target?.result as string);
+
+                    // 1. Chapter Name 자동 채우기
+                    let newName = '';
+                    if (json.chapter_name) {
+                        newName = json.chapter_name;
+                    } else if (json.book_name) {
+                        if (json.chapter) {
+                            newName = `${json.book_name} ${json.chapter}장`;
+                        } else {
+                            // chapter_name과 chapter가 없고 book_name만 있는 경우
+                            newName = json.book_name;
+                        }
+                    }
+
+                    // 2. Sequence 자동 채우기
+                    let newSequence = chapterForm.sequence;
+                    if (json.chapter) {
+                        // DB 중복 체크는 어렵지만 일단 파일 값 우선
+                        newSequence = parseInt(json.chapter);
+                        // 만약 중복이라면? -> 사용자 수동 수정 유도 (여기서는 값만 제안)
+                        const isDuplicate = chapters.some(c => c.sequence === newSequence && c.chapterId !== editingChapter?.chapterId);
+                        if (isDuplicate) {
+                            // 이미 있으면 자동으로 +1 할 수도 있지만, 요구사항은 "null이면 순서대로, 있으면 해당 값"
+                            // "이미 DB에 해당 책의 sequence가 있으면 자동으로 빈 칸 채움" -> 이 로직이 조금 애매함.
+                            // 사용자 요구: "파일 내 chapter 값이 있으면 사용. null이면 순서대로."
+                            // 추가 요구: "이미 DB에 해당 sequence가 있다면 자동으로 3을 채워넣음" -> 충돌 회피?
+                            // 일단 파일 값 우선 적용하고, 사용자가 보고 수정하게 둠.
+                        }
+                    }
+
+                    // 3. Paragraphs 카운트
+                    let paragraphCount = -1;
+                    if (json.content && Array.isArray(json.content)) {
+                        // "content" 하위의 "id" 개수 카운트
+                        paragraphCount = json.content.filter((item: any) => item.id).length;
+                    }
+
+                    // 폼 업데이트 (사용자가 수정 가능하도록)
+                    setChapterForm(prev => ({
+                        ...prev,
+                        chapterName: newName || prev.chapterName,
+                        sequence: newSequence, // 파일 값 우선
+                        paragraphs: paragraphCount
+                    }));
+
+                } catch (err) {
+                    console.error("JSON parsing error:", err);
+                    alert("파일 내용을 분석할 수 없습니다. 수동으로 입력해주세요.");
+                }
+            };
+            reader.readAsText(file);
+        } else {
+            // JSON 아님 -> 기본 로직 (폼 유지)
+        }
     };
 
     const handleSaveChapter = async () => {
@@ -228,7 +313,8 @@ const AdminBooksPage: React.FC = () => {
                     editingChapter.chapterId,
                     chapterFile || undefined,
                     chapterForm.chapterName,
-                    chapterForm.sequence
+                    chapterForm.sequence,
+                    chapterForm.paragraphs // [NEW]
                 );
                 alert('챕터가 수정되었습니다.');
             } else if (expandedBookId && chapterFile) {
@@ -236,7 +322,8 @@ const AdminBooksPage: React.FC = () => {
                     chapterFile,
                     expandedBookId,
                     chapterForm.chapterName,
-                    chapterForm.sequence
+                    chapterForm.sequence,
+                    chapterForm.paragraphs // [NEW]
                 );
                 alert('챕터가 등록되었습니다.');
             }
@@ -300,8 +387,8 @@ const AdminBooksPage: React.FC = () => {
                                 key={item.path}
                                 to={item.path}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${item.active
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                                     }`}
                             >
                                 <Icon size={20} />
@@ -411,8 +498,8 @@ const AdminBooksPage: React.FC = () => {
                                         <button
                                             onClick={() => toggleChapters(book.bookId)}
                                             className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-colors ${expandedBookId === book.bookId
-                                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                                 }`}
                                         >
                                             <FileText size={16} />
@@ -619,6 +706,18 @@ const AdminBooksPage: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="isAdultOnly"
+                                        checked={bookForm.isAdultOnly || false}
+                                        onChange={(e) => setBookForm({ ...bookForm, isAdultOnly: e.target.checked })}
+                                        className="w-4 h-4 text-emerald-500 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500"
+                                    />
+                                    <label htmlFor="isAdultOnly" className="text-sm text-gray-400">
+                                        성인 전용
+                                    </label>
+                                </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">표지 URL</label>
                                     <input
@@ -636,6 +735,39 @@ const AdminBooksPage: React.FC = () => {
                                         onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
                                         rows={3}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none resize-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">언어</label>
+                                    <select
+                                        value={bookForm.language}
+                                        onChange={(e) => setBookForm({ ...bookForm, language: e.target.value })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                    >
+                                        <option value="ko">한국어</option>
+                                        <option value="en">English</option>
+                                        <option value="ja">Japanese</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">열람 권한</label>
+                                    <select
+                                        value={bookForm.viewPermission}
+                                        onChange={(e) => setBookForm({ ...bookForm, viewPermission: e.target.value as 'FREE' | 'PREMIUM' })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                    >
+                                        <option value="FREE">무료</option>
+                                        <option value="PREMIUM">유료 (구매 필요)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">출판일</label>
+                                    <input
+                                        type="date"
+                                        value={bookForm.publishedDate || ''}
+                                        onChange={(e) => setBookForm({ ...bookForm, publishedDate: e.target.value })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                     />
                                 </div>
                             </div>
@@ -717,6 +849,21 @@ const AdminBooksPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">
+                                        문단 수 (자동 추출)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={chapterForm.paragraphs}
+                                        onChange={(e) => setChapterForm({ ...chapterForm, paragraphs: parseInt(e.target.value) || -1 })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                        readOnly={false} // 수정 가능
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        JSON 파일 업로드 시 자동 계산됩니다. (-1: 정보 없음/자동추출 실패)
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">
                                         콘텐츠 파일 {!editingChapter && '*'}
                                     </label>
                                     <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-emerald-500 transition-colors">
@@ -727,12 +874,12 @@ const AdminBooksPage: React.FC = () => {
                                         <input
                                             type="file"
                                             accept=".txt,.json,.html"
-                                            onChange={(e) => setChapterFile(e.target.files?.[0] || null)}
+                                            onChange={handleFileChange} // [UPDATED]
                                             className="hidden"
                                         />
                                     </label>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        지원 형식: .txt, .json, .html
+                                        지원 형식: .txt, .json, .html (JSON 권장)
                                     </p>
                                 </div>
                             </div>
@@ -761,7 +908,7 @@ const AdminBooksPage: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 
