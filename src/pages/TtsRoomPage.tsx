@@ -4,22 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     Volume2, VolumeX, Play, Pause, SkipBack, SkipForward,
     Settings, Users, ArrowLeft, BookOpen, Send, MessageCircle,
-    Plus, UserPlus, Crown, X, Loader2, DoorOpen
+    Plus, UserPlus, Crown, Loader2, DoorOpen, ExternalLink
 } from 'lucide-react';
 import useAuthStore from '../stores/authStore';
 import { readingRoomService, type ReadingRoom, type RoomParticipant } from '../services/readingRoomService';
+import { chatService, type ChatMessage } from '../services/chatService';
+// import { aiChatService, convertToUIMessages, type ChatMessage } from '../services/aiChatService';
+import websocketClient from '../services/websocketClient';
 import UserProfilePopup from '../components/UserProfilePopup';
 import InviteFriendModal from '../components/InviteFriendModal';
 import CreateRoomModal from '../components/CreateRoomModal';
-
-interface ChatMessage {
-    chatId: number;
-    senderId: number;
-    senderName: string;
-    senderProfileImage: string | null;
-    content: string;
-    sendAt: string;
-}
 
 // 방 목록 페이지 컴포넌트
 const RoomListView: React.FC<{
@@ -164,21 +158,17 @@ const TtsRoomPage: React.FC = () => {
     const [currentRoom, setCurrentRoom] = useState<ReadingRoom | null>(null);
 
     // 방 상태
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [isMuted, setIsMuted] = useState(false);
-    const [speed, setSpeed] = useState(1.0);
+
     const [progress] = useState(35);
 
     // 참여자 목록
     const [participants, setParticipants] = useState<RoomParticipant[]>([]);
 
-    // 채팅 상태
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        { chatId: 1, senderId: 1, senderName: '김독서', senderProfileImage: null, content: '안녕하세요! 이 책 재밌네요', sendAt: new Date().toISOString() },
-        { chatId: 2, senderId: 2, senderName: '이북러', senderProfileImage: null, content: '저도 이 부분 좋아요 ㅎㅎ', sendAt: new Date().toISOString() },
-    ]);
+    // AI 채팅 상태
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [isChatOpen, setIsChatOpen] = useState(true);
+    // const [isGenerating, setIsGenerating] = useState(false);
 
     // 모달 상태
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -204,7 +194,7 @@ const TtsRoomPage: React.FC = () => {
     // 채팅창 스크롤 자동 이동
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
+    }, [messages, isChatOpen]); // isChatOpen이 열릴 때도 스크롤 조정
 
     // 방 입장
     const handleEnterRoom = async (roomId: number) => {
@@ -213,35 +203,98 @@ const TtsRoomPage: React.FC = () => {
             setCurrentRoomId(roomId);
             setCurrentView('room');
 
-            // 방 정보 로드
+            // 1. 방 정보 및 참여자 로드
+            const [roomData, participantsData] = await Promise.all([
+                readingRoomService.getRoom(roomId),
+                readingRoomService.getParticipants(roomId).catch(() => [])
+            ]);
+            setCurrentRoom(roomData);
+            setParticipants(participantsData);
+
+            // 2. 기존 채팅 내역 로드 (REST API)
             try {
-                const roomData = await readingRoomService.getRoom(roomId);
-                setCurrentRoom(roomData);
-            } catch (err) {
-                console.error('Failed to load room:', err);
+                const history = await chatService.getRecentMessages(roomId);
+                // API에서 가져온 메시지는 시간순 정렬되어 있다고 가정
+                setMessages(history);
+            } catch (chatErr) {
+                console.error('Failed to load chat history:', chatErr);
             }
 
-            // 참여자 목록 로드
-            try {
-                const participantsData = await readingRoomService.getParticipants(roomId);
-                setParticipants(participantsData);
-            } catch (err) {
-                // Mock 참여자 데이터
-                setParticipants([
-                    { participantId: 1, userId: user?.userId || 0, nickname: user?.nickname || '나', profileImage: null, isHost: true, joinedAt: new Date().toISOString() },
-                ]);
+            // 3. WebSocket 연결 및 구독
+            const token = localStorage.getItem('accessToken'); // 수정: 'token' → 'accessToken'
+            console.log('[TtsRoomPage] Token exists:', !!token);
+
+            if (token) {
+                console.log('[TtsRoomPage] Checking WebSocket connection status...');
+                console.log('[TtsRoomPage] Is connected:', websocketClient.isConnected());
+
+                try {
+                    if (!websocketClient.isConnected()) {
+                        console.log('[TtsRoomPage] WebSocket not connected, attempting to connect...');
+                        await websocketClient.connect(token);
+                        console.log('[TtsRoomPage] ✅ WebSocket connection successful');
+                    } else {
+                        console.log('[TtsRoomPage] WebSocket already connected');
+                    }
+
+                    // 채팅 구독 (실시간 수신)
+                    console.log('[TtsRoomPage] Subscribing to chat room:', roomId);
+                    websocketClient.subscribeToChatRoom(
+                        roomId,
+                        (newMessage: ChatMessage) => {
+                            // [중요] 내 메시지도 서버를 통해 다시 받아서 그리는 것이 정합성에 좋습니다.
+                            // 만약 낙관적 업데이트(Optimistic UI)를 썼다면 중복 제거 로직 필요.
+                            // 여기서는 서버가 보내주는 걸 그대로 추가합니다.
+                            setMessages(prev => [...prev, newMessage]);
+                        },
+                        () => {
+                            alert('방장에 의해 강퇴되었습니다.');
+                            handleLeaveRoom();
+                        }
+                    );
+
+                    // 방 상태 구독
+                    console.log('[TtsRoomPage] Subscribing to room status:', roomId);
+                    websocketClient.subscribeToRoomStatus(
+                        roomId,
+                        (statusUpdate) => {
+                            if (statusUpdate.type === 'STATUS_CHANGE') {
+                                setCurrentRoom(prev => prev ? { ...prev, status: statusUpdate.status } : null);
+                            } else if (statusUpdate.type === 'PARTICIPANT_UPDATE') {
+                                readingRoomService.getParticipants(roomId).then(setParticipants);
+                            }
+                        }
+                    );
+                    console.log('[TtsRoomPage] ✅ All subscriptions completed');
+                } catch (wsError) {
+                    console.error('[TtsRoomPage] ❌ WebSocket connection/subscription failed:', wsError);
+                }
+            } else {
+                console.warn('[TtsRoomPage] ⚠️ No token found, skipping WebSocket connection');
             }
+
         } catch (err) {
             console.error('Failed to enter room:', err);
-            // 실패해도 일단 방 화면으로 이동 (개발 모드)
-            setCurrentRoomId(roomId);
-            setCurrentView('room');
+            // 에러 처리 로직
         }
     };
+
+    // AI 채팅 기록 로드
+    // const loadChatHistory = async (roomId: number) => {
+    //     try {
+    //         const history = await aiChatService.getChatHistory(roomId);
+    //         setMessages(convertToUIMessages(history));
+    //     } catch (err) {
+    //         console.error('Failed to load chat history:', err);
+    //     }
+    // };
 
     // 방 퇴장
     const handleLeaveRoom = async () => {
         if (currentRoomId) {
+            // WebSocket 구독 해제
+            websocketClient.unsubscribeFromRoom(currentRoomId);
+
             try {
                 await readingRoomService.leaveRoom(currentRoomId);
             } catch (err) {
@@ -251,37 +304,83 @@ const TtsRoomPage: React.FC = () => {
         setCurrentView('list');
         setCurrentRoomId(null);
         setCurrentRoom(null);
+        setMessages([]); // 채팅 초기화
     };
 
-    // 참여자 강퇴
-    const handleKickUser = async (targetUserId: number) => {
-        if (!currentRoomId) return;
-        try {
-            await readingRoomService.kickUser(currentRoomId, targetUserId);
-            setParticipants(prev => prev.filter(p => p.userId !== targetUserId));
-        } catch (err) {
-            console.error('Failed to kick user:', err);
-        }
-    };
 
-    // 메시지 전송
-    const handleSendMessage = () => {
-        if (!newMessage.trim()) return;
 
-        const newMsg: ChatMessage = {
-            chatId: Date.now(),
-            senderId: user?.userId || 0,
-            senderName: user?.nickname || '나',
-            senderProfileImage: user?.profileImage || null,
-            content: newMessage,
-            sendAt: new Date().toISOString(),
-        };
+    // 메시지 전송 (스트리밍)
+    const handleSendMessage = async () => {
+        // if (!newMessage.trim() || !currentRoomId || isGenerating) return;
 
-        setMessages(prev => [...prev, newMsg]);
+        // const userMsg = newMessage;
+        // setNewMessage('');
+        // setIsGenerating(true);
+
+        // // 1. 사용자 메시지 즉시 추가
+        // const tempUserMsgId = Date.now();
+        // setMessages(prev => [
+        //     ...prev,
+        //     { id: tempUserMsgId, role: 'user', content: userMsg, timestamp: new Date().toISOString() },
+        //     { id: tempUserMsgId + 1, role: 'ai', content: '', isLoading: true } // 로딩 메시지
+        // ]);
+
+        // try {
+        //     let aiContent = '';
+
+        //     // 스트리밍 호출
+        //     aiChatService.sendMessageStream(
+        //         currentRoomId,
+        //         { userMessage: userMsg }, // currentParagraphId 추가 가능
+        //         (chunk) => {
+        //             aiContent += chunk;
+        //             setMessages(prev => {
+        //                 const newMsgs = [...prev];
+        //                 const lastMsg = newMsgs[newMsgs.length - 1];
+        //                 if (lastMsg && lastMsg.role === 'ai') {
+        //                     lastMsg.content = aiContent;
+        //                     lastMsg.isLoading = false;
+        //                 }
+        //                 return newMsgs;
+        //             });
+        //         },
+        //         () => {
+        //             setIsGenerating(false);
+        //             // 완료 후 다시 로드해서 메타데이터(문단 ID 등) 동기화 (옵션)
+        //             // loadChatHistory(currentRoomId);
+        //             // 혹은 스트리밍 완료 시점에서 문단 ID를 알 수 없으므로,
+        //             // 필요하다면 별도 API를 호출하거나 스트리밍 프로토콜 조정 필요.
+        //             // 임시로 스트리밍 완료 처리.
+        //         },
+        //         (err) => {
+        //             console.error('Streaming error:', err);
+        //             setIsGenerating(false);
+        //             setMessages(prev => {
+        //                 const newMsgs = [...prev];
+        //                 const lastMsg = newMsgs[newMsgs.length - 1];
+        //                 if (lastMsg && lastMsg.role === 'ai') {
+        //                     lastMsg.content += '\n(오류가 발생했습니다)';
+        //                     lastMsg.isLoading = false;
+        //                 }
+        //                 return newMsgs;
+        //             });
+        //         }
+        //     );
+
+        // } catch (err) {
+        //     console.error('Failed to send message:', err);
+        //     setIsGenerating(false);
+        // }
+
+        if (!newMessage.trim() || !currentRoomId) return;
+
+        // WebSocket으로 전송 요청
+        websocketClient.sendChatMessage(currentRoomId, 'TEXT', newMessage);
+
+        // 입력창 초기화 (메시지 추가는 subscribe 콜백에서 처리함)
         setNewMessage('');
-
-        // TODO: 실제로는 WebSocket으로 메시지 전송
     };
+
 
     // 엔터키로 전송
     const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -293,11 +392,20 @@ const TtsRoomPage: React.FC = () => {
 
     // 프로필 클릭
     const handleProfileClick = (userId: number, event: React.MouseEvent) => {
+        if (userId === user?.userId) return; // 내 프로필은 클릭 무시
         setProfilePopup({
             isOpen: true,
             userId,
             position: { x: event.clientX, y: event.clientY }
         });
+    };
+
+    // 출처 문단 이동 핸들러
+    const handleCitationClick = (paragraphId: string) => {
+        console.log(`Moving to paragraph: ${paragraphId}`);
+        // TODO: 실제 BookViewer의 문단 이동 로직 연결
+        // 예: document.getElementById(paragraphId)?.scrollIntoView();
+        alert(`문단 ${paragraphId}로 이동합니다. (구현 예정)`);
     };
 
     // 방 만들기
@@ -444,55 +552,7 @@ const TtsRoomPage: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* 컨트롤 */}
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.3 }}
-                            className="flex items-center justify-center gap-6"
-                        >
-                            <button className="p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all">
-                                <SkipBack size={24} />
-                            </button>
-
-                            <button
-                                onClick={() => setIsPlaying(!isPlaying)}
-                                className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50 transition-all"
-                            >
-                                {isPlaying ? <Pause size={28} /> : <Play size={28} className="ml-1" />}
-                            </button>
-
-                            <button className="p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition-all">
-                                <SkipForward size={24} />
-                            </button>
-                        </motion.div>
-
-                        {/* 추가 컨트롤 */}
-                        <div className="flex items-center justify-center gap-8 mt-8">
-                            <button
-                                onClick={() => setIsMuted(!isMuted)}
-                                className="flex items-center gap-2 text-white/70 hover:text-white transition-colors"
-                            >
-                                {isMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                                <span className="text-sm">음량</span>
-                            </button>
-
-                            <div className="flex items-center gap-2 text-white/70">
-                                <span className="text-sm">속도</span>
-                                <select
-                                    value={speed}
-                                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
-                                    className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-white text-sm"
-                                >
-                                    <option value="0.5">0.5x</option>
-                                    <option value="0.75">0.75x</option>
-                                    <option value="1">1x</option>
-                                    <option value="1.25">1.25x</option>
-                                    <option value="1.5">1.5x</option>
-                                    <option value="2">2x</option>
-                                </select>
-                            </div>
-                        </div>
+                        {/* 컨트롤 (생략) */}
 
                         {/* 참여자 */}
                         <motion.div
@@ -523,20 +583,6 @@ const TtsRoomPage: React.FC = () => {
                                         {participant.isHost && (
                                             <Crown size={14} className="text-yellow-400" />
                                         )}
-
-                                        {/* 강퇴 버튼 (방장만, 자기 자신 제외) */}
-                                        {isHost && participant.userId !== user?.userId && (
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleKickUser(participant.userId);
-                                                }}
-                                                className="ml-2 p-1 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 rounded transition-all"
-                                                title="강퇴"
-                                            >
-                                                <X size={14} />
-                                            </button>
-                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -559,7 +605,7 @@ const TtsRoomPage: React.FC = () => {
                             <div className="flex items-center justify-between">
                                 <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                     <MessageCircle size={20} />
-                                    실시간 채팅
+                                    독서 토론 채팅
                                 </h3>
                                 <button
                                     onClick={() => setIsChatOpen(false)}
@@ -568,41 +614,59 @@ const TtsRoomPage: React.FC = () => {
                                     ✕
                                 </button>
                             </div>
-                            <p className="text-sm text-white/50 mt-1">함께 읽는 분들과 소통하세요</p>
+                            <p className="text-sm text-white/50 mt-1">참여자들과 실시간으로 대화하세요</p>
                         </div>
 
                         {/* 채팅 메시지 영역 */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                            {messages.map((msg) => {
-                                const isMe = msg.senderId === (user?.userId || 0);
+                            {messages.map((msg, idx) => {
+                                const isMe = msg.senderId === user?.userId;
                                 return (
                                     <div
-                                        key={msg.chatId}
+                                        key={msg.chatId || idx}
                                         className={`flex gap-2 ${isMe ? 'flex-row-reverse' : ''}`}
                                     >
                                         {/* 프로필 이미지 */}
                                         <div
-                                            className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs cursor-pointer ${isMe ? 'bg-gradient-to-br from-indigo-500 to-purple-500' : 'bg-gradient-to-br from-purple-400 to-pink-400'
+                                            className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white font-bold text-xs ${isMe
+                                                ? 'bg-gradient-to-br from-indigo-500 to-purple-500'
+                                                : 'bg-gradient-to-br from-purple-400 to-pink-400'
                                                 }`}
+
                                             onClick={(e) => !isMe && handleProfileClick(msg.senderId, e)}
                                         >
-                                            {msg.senderName.charAt(0)}
+                                            {/* 이미지가 없으면 이름 첫 글자 */}
+                                            {msg.senderProfileImage ? (
+                                                <img src={msg.senderProfileImage} alt="" className="w-full h-full rounded-full object-cover" />
+                                            ) : (
+                                                (msg.senderName || '?').charAt(0)
+                                            )}
                                         </div>
-
                                         {/* 메시지 내용 */}
-                                        <div className={`max-w-[70%] ${isMe ? 'text-right' : ''}`}>
-                                            <p
-                                                className="text-xs text-white/50 mb-1 cursor-pointer hover:text-white/70"
-                                                onClick={(e) => !isMe && handleProfileClick(msg.senderId, e)}
-                                            >
-                                                {msg.senderName}
-                                            </p>
-                                            <div className={`px-3 py-2 rounded-2xl text-sm ${isMe
+                                        <div className={`max-w-[80%] ${isMe ? 'text-right' : 'text-left'}`}>
+                                            {/* 상대방 이름 표시 */}
+                                            {!isMe && (
+                                                <p className="text-xs text-white/50 mb-1 ml-1">
+                                                    {msg.senderName}
+                                                </p>
+                                            )}
+
+                                            <div className={`px-3 py-2 rounded-2xl text-sm break-all ${isMe
                                                 ? 'bg-gradient-to-r from-indigo-500 to-purple-500 text-white rounded-tr-sm'
                                                 : 'bg-white/10 text-white rounded-tl-sm'
                                                 }`}>
-                                                {msg.content}
+                                                {/* 이미지 메시지 지원 (messageType 확인) */}
+                                                {msg.messageType === 'IMAGE' && msg.imageUrl ? (
+                                                    <img src={msg.imageUrl} alt="전송된 이미지" className="max-w-full rounded-lg mb-1" />
+                                                ) : (
+                                                    msg.content
+                                                )}
                                             </div>
+
+                                            {/* 시간 표시 */}
+                                            <p className="text-[10px] text-white/30 mt-1 px-1">
+                                                {new Date(msg.sendAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </p>
                                         </div>
                                     </div>
                                 );
