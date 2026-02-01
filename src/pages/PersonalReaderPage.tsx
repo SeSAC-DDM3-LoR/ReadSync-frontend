@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Settings, Search, List,
@@ -153,6 +153,7 @@ const PersonalReaderPage: React.FC = () => {
     const pulseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const currentPageRef = useRef<number>(0);  // 현재 페이지를 ref로 추적하여 의존성 문제 해결
     const pagesRef = useRef<PageContent[]>([]);  // pages를 ref로 추적하여 callback 의존성 안정화
+    const lastLeftPageFirstParagraphRef = useRef<number>(0);  // 왼쪽 페이지 첫 문단 추적 (fallback용)
 
     // 마지막 읽은 위치 복원
     const [initialPosition, setInitialPosition] = useState<number | null>(null);
@@ -345,18 +346,38 @@ const PersonalReaderPage: React.FC = () => {
     }, [pages]);
 
     // 현재 페이지에서 문단 인덱스 추출 헬퍼 함수 (ref 사용하여 의존성 최소화)
+    // 항상 "왼쪽 페이지 첫 문단"을 반환 (일관성 유지)
     const getCurrentParagraphIndex = useCallback((): number => {
         const page = currentPageRef.current;
         const currentPages = pagesRef.current;
-        if (!currentPages[page]?.items?.length) return 1;
-        const firstItem = currentPages[page].items[0];
-        const match = firstItem.originalId?.match(/p_(\d+)/);
-        return match ? parseInt(match[1]) : 1;
-    }, []);  // 의존성 없음 - pagesRef를 통해 최신 값 접근
 
-    // 현재 페이지의 문단들 추적
+
+        // 유효성 검사: pages가 비어있으면 마지막으로 추적된 왼쪽 첫 문단 사용
+        if (!currentPages[page]?.items?.length) {
+
+            return lastLeftPageFirstParagraphRef.current || 0; // 0 = 무효 (저장하지 않음)
+        }
+
+        const firstItem = currentPages[page].items[0];
+
+
+        const match = firstItem.originalId?.match(/p_(\d+)/);
+        return match ? parseInt(match[1]) : 0;
+    }, []);  // 의존성 없음 - ref를 통해 최신 값 접근
+
+    // 현재 페이지의 문단들 추적 + 왼쪽 첫 문단 저장
     useEffect(() => {
         if (pages[currentPage]) {
+            // 왼쪽 페이지 첫 문단 추적 (fallback 용)
+            const firstItem = pages[currentPage].items[0];
+            if (firstItem?.originalId) {
+                const match = firstItem.originalId.match(/p_(\d+)/);
+                if (match) {
+                    lastLeftPageFirstParagraphRef.current = parseInt(match[1]);
+                }
+            }
+
+            // 읽은 문단 추적
             pages[currentPage].items.forEach(item => {
                 const match = item.originalId?.match(/p_(\d+)/);
                 if (match) {
@@ -381,22 +402,45 @@ const PersonalReaderPage: React.FC = () => {
 
         const now = Date.now();
         const readTimeSeconds = Math.floor((now - readStartTimeRef.current) / 1000);
-        const paragraphs = Array.from(readParagraphsRef.current);
+        const allParagraphs = Array.from(readParagraphsRef.current);
+
+        // 실제 콘텐츠에서 최대 문단 번호 계산 (bookContentData.paragraphs가 부정확할 수 있음)
+        const actualMaxParagraph = pagesRef.current.reduce((max, page) => {
+            page.items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    const num = parseInt(match[1]);
+                    if (num > max) max = num;
+                }
+            });
+            return max;
+        }, 0);
+
+        // 유효한 범위(1 ~ actualMaxParagraph) 내의 문단만 필터링
+        const paragraphs = allParagraphs.filter(p => p >= 1 && p <= (actualMaxParagraph || 999));
 
         // 읽은 시간이 5초 미만이고 문단도 없으면 스킵
         if (readTimeSeconds < 5 && paragraphs.length === 0) return;
 
+        const lastReadPos = getCurrentParagraphIndex();
+
+
+        // 유효하지 않은 위치(0)면 펄스 전송 스킵 (데이터 손상 방지)
+        if (lastReadPos === 0) {
+
+            return;
+        }
+
         const request: ReadingPulseRequest = {
             libraryId: parseInt(libraryId),
             chapterId: parseInt(chapterId),
-            lastReadPos: getCurrentParagraphIndex(),
+            lastReadPos,
             readParagraphIndices: paragraphs,
             readTime: readTimeSeconds
         };
 
         try {
             await readingPulseService.sendPulse(request);
-            console.log('독서 펄스 전송 완료:', request);
         } catch (error) {
             console.error('독서 펄스 전송 실패:', error);
         }
@@ -451,10 +495,15 @@ const PersonalReaderPage: React.FC = () => {
 
             if (readTimeSeconds < 5 && readParagraphsRef.current.size === 0) return;
 
+            const lastReadPos = getCurrentParagraphIndex();
+
+            // 유효하지 않은 위치(0)면 전송 스킵 (데이터 손상 방지)
+            if (lastReadPos === 0) return;
+
             const request: ReadingPulseRequest = {
                 libraryId: parseInt(libraryId),
                 chapterId: parseInt(chapterId),
-                lastReadPos: getCurrentParagraphIndex(),
+                lastReadPos,
                 readParagraphIndices: Array.from(readParagraphsRef.current),
                 readTime: readTimeSeconds
             };
@@ -471,8 +520,27 @@ const PersonalReaderPage: React.FC = () => {
             // React Strict Mode에서 두 번 실행되는 것을 방지
             // setTimeout으로 감싸서 Strict Mode 재마운트와 실제 언마운트 구분
             // 재마운트 시 위의 clearTimeout으로 취소됨
-            cleanupTimeoutRef.current = setTimeout(() => {
-                sendReadingPulseRef.current();
+
+            // ⚠️ 중요: cleanup 시점에 현재 위치를 캡처! (100ms 후에는 새 챕터 데이터로 덮어쓰여짐)
+            const capturedLastReadPos = getCurrentParagraphIndex();
+            const capturedParagraphs = Array.from(readParagraphsRef.current);
+            const capturedReadTime = Math.floor((Date.now() - readStartTimeRef.current) / 1000);
+
+            cleanupTimeoutRef.current = setTimeout(async () => {
+                // 캡처된 값이 유효한 경우에만 전송
+                if (capturedLastReadPos > 0 && libraryId && chapterId) {
+                    try {
+                        await readingPulseService.sendPulse({
+                            libraryId: parseInt(libraryId),
+                            chapterId: parseInt(chapterId),
+                            lastReadPos: capturedLastReadPos,
+                            readParagraphIndices: capturedParagraphs,
+                            readTime: capturedReadTime
+                        });
+                    } catch (error) {
+                        console.error('[cleanup] 펄스 전송 실패:', error);
+                    }
+                }
             }, 100);
         };
     }, [libraryId, chapterId, getCurrentParagraphIndex]);  // sendReadingPulse 의존성 제거
@@ -482,11 +550,16 @@ const PersonalReaderPage: React.FC = () => {
         const loadLastPosition = async () => {
             if (!libraryId || !chapterId) return;
 
+            // 챕터 변경 시 리셋
+            initialPositionApplied.current = false;
+            setInitialPosition(null);
+
             try {
                 const bookmark = await getBookmarkByLibraryAndChapter(
                     parseInt(libraryId),
                     parseInt(chapterId)
                 );
+
 
                 if (bookmark?.lastReadPos) {
                     setInitialPosition(bookmark.lastReadPos);
@@ -501,24 +574,53 @@ const PersonalReaderPage: React.FC = () => {
 
     // 마지막 읽은 위치로 이동
     useEffect(() => {
-        if (initialPosition && pages.length > 0 && !initialPositionApplied.current) {
-            // initialPosition(문단 번호)가 포함된 페이지 찾기
-            const targetPageIndex = pages.findIndex(page =>
-                page.items.some(item => {
+        // isLoading이 false일 때만 시도 (현재 챕터의 페이지가 완전히 로드됨)
+        if (initialPosition && pages.length > 0 && !isLoading && !initialPositionApplied.current) {
+            // 디버그: 현재 페이지들의 문단 범위 확인
+            const allParagraphIds = new Set<number>();
+            pages.forEach(page => {
+                page.items.forEach(item => {
+                    const match = item.originalId?.match(/p_(\d+)/);
+                    if (match) allParagraphIds.add(parseInt(match[1]));
+                });
+            });
+            const sortedIds = Array.from(allParagraphIds).sort((a, b) => a - b);
+            const minId = sortedIds[0] || 0;
+            const maxId = sortedIds[sortedIds.length - 1] || 0;
+
+
+            // 해당 문단이 포함된 모든 페이지 찾기 (분할된 문단 고려)
+            const matchingPages: number[] = [];
+            pages.forEach((page, pageIndex) => {
+                const hasTarget = page.items.some(item => {
                     const match = item.originalId?.match(/p_(\d+)/);
                     return match && parseInt(match[1]) === initialPosition;
-                })
-            );
+                });
+                if (hasTarget) {
+                    matchingPages.push(pageIndex);
+                }
+            });
 
-            if (targetPageIndex !== -1) {
+            if (matchingPages.length > 0) {
+                // 마지막 매칭 페이지 사용 (문단이 분할된 경우 읽던 위치에 더 가까움)
+                const targetPageIndex = matchingPages[matchingPages.length - 1];
                 // 짝수 페이지로 맞추기 (2페이지씩 보여주므로)
-                setCurrentPage(targetPageIndex % 2 === 0 ? targetPageIndex : Math.max(0, targetPageIndex - 1));
-                console.log(`마지막 읽은 위치로 이동: 문단 ${initialPosition} -> 페이지 ${targetPageIndex + 1}`);
+                const finalPage = targetPageIndex % 2 === 0 ? targetPageIndex : Math.max(0, targetPageIndex - 1);
+                setCurrentPage(finalPage);
+                initialPositionApplied.current = true;
+            } else if (initialPosition >= minId && initialPosition <= maxId) {
+                // 범위 내인데 못 찾음 - 데이터 불일치
+                initialPositionApplied.current = true;
+            } else if (initialPosition > maxId) {
+                // 범위 초과 - 마지막 페이지로 이동
+                const lastPage = pages.length - 1;
+                const finalPage = lastPage % 2 === 0 ? lastPage : Math.max(0, lastPage - 1);
+                setCurrentPage(finalPage);
+                initialPositionApplied.current = true;
             }
-
-            initialPositionApplied.current = true;
+            // else: 아직 페이지 로딩 중일 수 있음 - 다음 렌더에서 재시도
         }
-    }, [initialPosition, pages]);
+    }, [initialPosition, pages, isLoading]);
 
     // ==================== Data Loading ====================
 
