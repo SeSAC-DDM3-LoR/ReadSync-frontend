@@ -130,7 +130,10 @@ const RoomListView: React.FC<{
                                             <span className="text-sm">{room.currentParticipants}/{room.maxCapacity}</span>
                                         </div>
                                         {/* 입장 버튼 */}
-                                        <button className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-xl hover:bg-purple-500/30 transition-colors">
+                                        <button
+                                            onClick={() => onEnterRoom(room.roomId)}
+                                            className="flex items-center gap-2 px-4 py-2 bg-purple-500/20 text-purple-400 rounded-xl hover:bg-purple-500/30 transition-colors"
+                                        >
                                             <DoorOpen size={18} />
                                             입장
                                         </button>
@@ -158,7 +161,6 @@ const TtsRoomPage: React.FC = () => {
     const [currentRoom, setCurrentRoom] = useState<ReadingRoom | null>(null);
 
     // 방 상태
-
     const [progress] = useState(35);
 
     // 참여자 목록
@@ -168,7 +170,6 @@ const TtsRoomPage: React.FC = () => {
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [newMessage, setNewMessage] = useState('');
     const [isChatOpen, setIsChatOpen] = useState(true);
-    // const [isGenerating, setIsGenerating] = useState(false);
 
     // 모달 상태
     const [showInviteModal, setShowInviteModal] = useState(false);
@@ -187,33 +188,47 @@ const TtsRoomPage: React.FC = () => {
     // URL에 roomId가 있으면 해당 방으로 입장
     useEffect(() => {
         if (roomId) {
-            handleEnterRoom(parseInt(roomId));
+            const id = parseInt(roomId);
+            if (!isNaN(id) && currentRoomId !== id) {
+                handleEnterRoom(id);
+            }
+        } else {
+            // URL에 roomId가 없으면 목록 뷰로 전환
+            setCurrentView('list');
+            setCurrentRoomId(null);
+            setCurrentRoom(null);
         }
     }, [roomId]);
 
-    // 채팅창 스크롤 자동 이동
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages, isChatOpen]); // isChatOpen이 열릴 때도 스크롤 조정
+    // ... (중략) ...
 
     // 방 입장
-    const handleEnterRoom = async (roomId: number) => {
+    const handleEnterRoom = async (targetRoomId: number) => {
+        // 이미 해당 방에 있으면 중복 입장 방지 (URL 변경에 의한 재진입 등)
+        if (currentRoomId === targetRoomId && currentView === 'room') return;
+
+        // URL 업데이트 (URL이 해당 방 번호가 아닐 경우에만)
+        if (!window.location.pathname.includes(`/tts-room/${targetRoomId}`)) {
+            navigate(`/tts-room/${targetRoomId}`);
+            return; // URL 변경 후 useEffect가 다시 호출할 것이므로 여기서 중단
+        }
+
         try {
-            await readingRoomService.enterRoom(roomId);
-            setCurrentRoomId(roomId);
+            await readingRoomService.enterRoom(targetRoomId);
+            setCurrentRoomId(targetRoomId);
             setCurrentView('room');
 
             // 1. 방 정보 및 참여자 로드
             const [roomData, participantsData] = await Promise.all([
-                readingRoomService.getRoom(roomId),
-                readingRoomService.getParticipants(roomId).catch(() => [])
+                readingRoomService.getRoom(targetRoomId),
+                readingRoomService.getParticipants(targetRoomId).catch(() => [])
             ]);
             setCurrentRoom(roomData);
             setParticipants(participantsData);
 
             // 2. 기존 채팅 내역 로드 (REST API)
             try {
-                const history = await chatService.getRecentMessages(roomId);
+                const history = await chatService.getRecentMessages(targetRoomId);
                 // API에서 가져온 메시지는 시간순 정렬되어 있다고 가정
                 setMessages(history);
             } catch (chatErr) {
@@ -221,7 +236,7 @@ const TtsRoomPage: React.FC = () => {
             }
 
             // 3. WebSocket 연결 및 구독
-            const token = localStorage.getItem('accessToken'); // 수정: 'token' → 'accessToken'
+            const token = localStorage.getItem('accessToken');
             console.log('[TtsRoomPage] Token exists:', !!token);
 
             if (token) {
@@ -238,13 +253,11 @@ const TtsRoomPage: React.FC = () => {
                     }
 
                     // 채팅 구독 (실시간 수신)
-                    console.log('[TtsRoomPage] Subscribing to chat room:', roomId);
+                    console.log('[TtsRoomPage] Subscribing to chat room:', targetRoomId);
                     websocketClient.subscribeToChatRoom(
-                        roomId,
+                        targetRoomId,
                         (newMessage: ChatMessage) => {
                             // [중요] 내 메시지도 서버를 통해 다시 받아서 그리는 것이 정합성에 좋습니다.
-                            // 만약 낙관적 업데이트(Optimistic UI)를 썼다면 중복 제거 로직 필요.
-                            // 여기서는 서버가 보내주는 걸 그대로 추가합니다.
                             setMessages(prev => [...prev, newMessage]);
                         },
                         () => {
@@ -254,14 +267,23 @@ const TtsRoomPage: React.FC = () => {
                     );
 
                     // 방 상태 구독
-                    console.log('[TtsRoomPage] Subscribing to room status:', roomId);
+                    console.log('[TtsRoomPage] Subscribing to room status:', targetRoomId);
                     websocketClient.subscribeToRoomStatus(
-                        roomId,
+                        targetRoomId,
                         (statusUpdate) => {
+                            console.log('[TtsRoomPage] 📨 Received status update:', statusUpdate);
+
                             if (statusUpdate.type === 'STATUS_CHANGE') {
+                                console.log('[TtsRoomPage] Status changed to:', statusUpdate.status);
                                 setCurrentRoom(prev => prev ? { ...prev, status: statusUpdate.status } : null);
                             } else if (statusUpdate.type === 'PARTICIPANT_UPDATE') {
-                                readingRoomService.getParticipants(roomId).then(setParticipants);
+                                console.log('[TtsRoomPage] Participant update detected, reloading participants...');
+                                readingRoomService.getParticipants(targetRoomId)
+                                    .then(participants => {
+                                        console.log('[TtsRoomPage] ✅ Participants updated:', participants);
+                                        setParticipants(participants);
+                                    })
+                                    .catch(err => console.error('[TtsRoomPage] ❌ Failed to reload participants:', err));
                             }
                         }
                     );

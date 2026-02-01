@@ -15,6 +15,7 @@ import MyPage from './pages/MyPage';
 import NoticesPage from './pages/NoticesPage';
 import InquiryPage from './pages/InquiryPage';
 import FriendsPage from './pages/FriendsPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 // 추가 페이지
 import ReaderPage from './pages/ReaderPage';
@@ -64,12 +65,16 @@ function App() {
         {/* AI 기능 */}
         <Route path="/ai-chat" element={<AiChatPage />} />
         <Route path="/tts-room" element={<TtsRoomPage />} />
+        <Route path="/tts-room/:roomId" element={<TtsRoomPage />} />
 
         {/* 커뮤니티 */}
         <Route path="/community" element={<CommunityPage />} />
 
         {/* 친구 */}
         <Route path="/friends" element={<FriendsPage />} />
+
+        {/* 알림 */}
+        <Route path="/notifications" element={<NotificationsPage />} />
 
         {/* 마이페이지 */}
         <Route path="/mypage" element={<MyPage />} />

@@ -276,6 +276,59 @@ class WebSocketClient {
     isKicked(roomId: number): boolean {
         return this.kickedRooms.has(roomId);
     }
+
+    /**
+     * 사용자 초대 알림 구독
+     */
+    subscribeToInvitations(
+        userId: number,
+        onInvitation: (invitation: any) => void
+    ): void {
+        console.log(`[WebSocket] Attempting to subscribe to invitations for user ${userId}`);
+
+        if (!this.client || this.connectionStatus !== 'CONNECTED') {
+            console.error('❌ [WebSocket] Cannot subscribe - not connected');
+            return;
+        }
+
+        const destination = `/topic/user/${userId}/invitations`;
+
+        // 이미 구독 중인지 확인
+        if (this.subscriptions.has(destination)) {
+            console.warn(`⚠️ [WebSocket] Already subscribed to ${destination}`);
+            return;
+        }
+
+        try {
+            const subscription = this.client.subscribe(destination, (message: IMessage) => {
+                console.log(`📨 [WebSocket] Received invitation notification:`, message.body);
+                try {
+                    const invitation = JSON.parse(message.body);
+                    onInvitation(invitation);
+                } catch (error) {
+                    console.error('❌ [WebSocket] Failed to parse invitation:', error);
+                }
+            });
+
+            this.subscriptions.set(destination, subscription);
+            console.log(`✅ [WebSocket] Successfully subscribed to ${destination}`);
+        } catch (error) {
+            console.error(`❌ [WebSocket] Failed to subscribe to ${destination}:`, error);
+        }
+    }
+
+    /**
+     * 초대 알림 구독 해제
+     */
+    unsubscribeFromInvitations(userId: number): void {
+        const destination = `/topic/user/${userId}/invitations`;
+        const subscription = this.subscriptions.get(destination);
+        if (subscription) {
+            subscription.unsubscribe();
+            this.subscriptions.delete(destination);
+            console.log(`✅ [WebSocket] Unsubscribed from ${destination}`);
+        }
+    }
 }
 
 // 싱글톤 인스턴스

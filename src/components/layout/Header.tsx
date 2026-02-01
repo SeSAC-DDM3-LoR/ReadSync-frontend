@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, User, Menu, Search, X, ShoppingCart, Bell, LogOut, Settings, ChevronDown } from 'lucide-react';
+import { BookOpen, User, Menu, Search, X, ShoppingCart, LogOut, Settings, ChevronDown } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { cartService } from '../../services/cartService';
+import NotificationDropdown from '../NotificationDropdown';
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -127,6 +128,9 @@ const Header: React.FC = () => {
             <Link to="/community" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
               커뮤니티
             </Link>
+            <Link to="/friends" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+              친구
+            </Link>
             <Link to="/subscription" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
               구독상점
             </Link>
@@ -142,7 +146,8 @@ const Header: React.FC = () => {
               <Search size={20} />
             </button>
 
-
+            {/* 알림 */}
+            <NotificationDropdown />
 
             {/* 장바구니 */}
             <Link to="/cart" className="relative p-2 text-gray-600 hover:bg-emerald-50 rounded-full transition-colors">
@@ -276,6 +281,9 @@ const Header: React.FC = () => {
               </Link>
               <Link to="/community" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
                 커뮤니티
+              </Link>
+              <Link to="/friends" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+                친구
               </Link>
               <Link to="/subscription" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
                 구독상점
