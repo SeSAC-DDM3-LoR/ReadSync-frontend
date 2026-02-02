@@ -405,7 +405,10 @@ const PersonalReaderPage: React.FC = () => {
         const allParagraphs = Array.from(readParagraphsRef.current);
 
         // 실제 콘텐츠에서 최대 문단 번호 계산 (bookContentData.paragraphs가 부정확할 수 있음)
-        const actualMaxParagraph = pagesRef.current.reduce((max, page) => {
+        // 우선순위: 1. bookContentData의 paragraphs 2. 현재 페이지 문단 파싱값 3. 넉넉한 기본값(99999)
+        const contentMax = bookContentData?.paragraphs;
+
+        const parsedMax = pagesRef.current.reduce((max, page) => {
             page.items.forEach(item => {
                 const match = item.originalId?.match(/p_(\d+)/);
                 if (match) {
@@ -416,18 +419,27 @@ const PersonalReaderPage: React.FC = () => {
             return max;
         }, 0);
 
-        // 유효한 범위(1 ~ actualMaxParagraph) 내의 문단만 필터링
-        const paragraphs = allParagraphs.filter(p => p >= 1 && p <= (actualMaxParagraph || 999));
+        const limit = contentMax || (parsedMax > 0 ? parsedMax : 99999);
+
+        // 유효한 범위(1 ~ limit) 내의 문단만 필터링
+        const paragraphs = allParagraphs.filter(p => p >= 1 && p <= limit);
+
+        const lastReadPos = getCurrentParagraphIndex();
+
+        // [비상 대책] 읽은 문단 목록이 비어있다면, 현재 보고 있는 문단이라도 추가
+        // (타이밍 문제나 데이터 로딩 지연 등으로 문단 수집이 누락되는 경우 방지)
+        if (paragraphs.length === 0 && lastReadPos > 0) {
+            // 중복 방지를 위해 확인 후 추가 (어차피 빈 배열이지만)
+            if (!paragraphs.includes(lastReadPos)) {
+                paragraphs.push(lastReadPos);
+            }
+        }
 
         // 읽은 시간이 5초 미만이고 문단도 없으면 스킵
         if (readTimeSeconds < 5 && paragraphs.length === 0) return;
 
-        const lastReadPos = getCurrentParagraphIndex();
-
-
         // 유효하지 않은 위치(0)면 펄스 전송 스킵 (데이터 손상 방지)
         if (lastReadPos === 0) {
-
             return;
         }
 

@@ -6,7 +6,7 @@ import { cartService } from '../../services/cartService';
 
 const Header: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout } = useAuthStore();
+  const { user, isAuthenticated, logout, fetchCurrentUser } = useAuthStore();
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,7 +159,13 @@ const Header: React.FC = () => {
               // 로그인된 경우: 프로필 드롭다운
               <div className="relative">
                 <button
-                  onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                  onClick={() => {
+                    const willOpen = !isProfileDropdownOpen;
+                    setIsProfileDropdownOpen(willOpen);
+                    if (willOpen) {
+                      fetchCurrentUser(); // 드롭다운 열 때 최신 정보 가져오기
+                    }
+                  }}
                   className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-emerald-50 transition-colors"
                 >
                   {renderProfileImage()}
@@ -185,7 +191,10 @@ const Header: React.FC = () => {
 
                     <Link
                       to="/mypage"
-                      onClick={() => setIsProfileDropdownOpen(false)}
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        fetchCurrentUser(); // 최신 유저 정보 갱신
+                      }}
                       className="flex items-center gap-3 px-4 py-2.5 text-gray-700 hover:bg-emerald-50 transition-colors"
                     >
                       <User size={18} className="text-gray-500" />

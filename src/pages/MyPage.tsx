@@ -24,7 +24,7 @@ import { bookLogService, type BookLog } from '../services/libraryService';
 const MyPage: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, isAuthenticated, logout, updateUser } = useAuthStore();
+    const { user, isAuthenticated, logout, updateUser, fetchCurrentUser } = useAuthStore();
 
     // Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -32,6 +32,9 @@ const MyPage: React.FC = () => {
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
+        } else {
+            // 마이페이지 진입 시 최신 유저 정보 갱신 (경험치, 레벨 등)
+            fetchCurrentUser();
         }
     }, [isAuthenticated]);
 
