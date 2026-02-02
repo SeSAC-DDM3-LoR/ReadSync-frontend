@@ -25,6 +25,26 @@ export const paymentService = {
         const response = await api.post<PaymentResponse>('/v1/payments/confirm', request);
         return response.data;
     },
+
+    /**
+     * 내 결제(주문) 내역 조회
+     */
+    getMyOrders: async (page = 0, size = 10): Promise<{ content: OrderResponse[] }> => {
+        const response = await api.get<{ content: OrderResponse[] }>('/v1/orders/me', {
+            params: { page, size }
+        });
+        return response.data;
+    },
 };
+
+export interface OrderResponse {
+    orderId: number;
+    orderUid: string;
+    orderName: string;
+    totalAmount: number;
+    status: string;
+    createdAt: string;
+    receiptUrl: string | null;
+}
 
 export default paymentService;

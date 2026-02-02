@@ -16,6 +16,7 @@ import { expService, creditService } from '../services/userService';
 import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
 import type { Level } from '../services/levelService';
 import { subscriptionService, type Subscription } from '../services/subscriptionService';
+import { paymentService, type OrderResponse } from '../services/paymentService';
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
 import { GENRES, getGenreLabels } from '../constants/genres';
@@ -42,7 +43,7 @@ const MyPage: React.FC = () => {
 
     const menuItems = [
         { path: '/mypage', label: '프로필', icon: User },
-        { path: '/mypage/subscription', label: '구독 관리', icon: Crown },
+        { path: '/mypage/subscription', label: '구독 관리 및 결제', icon: Crown },
         { path: '/mypage/reviews', label: '내 리뷰', icon: Star },
         { path: '/mypage/comments', label: '내 댓글', icon: MessageSquare },
         { path: '/mypage/exp', label: '경험치 내역', icon: Zap },
@@ -807,19 +808,25 @@ const CreditsSection: React.FC = () => {
 const SubscriptionSection: React.FC = () => {
     const navigate = useNavigate();
     const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [orders, setOrders] = useState<OrderResponse[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isCancelling, setIsCancelling] = useState(false);
 
     useEffect(() => {
-        loadSubscription();
+        loadData();
     }, []);
 
-    const loadSubscription = async () => {
+    const loadData = async () => {
+        setIsLoading(true);
         try {
-            const data = await subscriptionService.getMySubscription();
-            setSubscription(data);
+            const [subData, ordersData] = await Promise.all([
+                subscriptionService.getMySubscription().catch(() => null), // 구독 없으면 null
+                paymentService.getMyOrders(0, 5) // 최근 5건만 표시
+            ]);
+            setSubscription(subData);
+            setOrders(ordersData.content);
         } catch (error) {
-            console.error('Failed to load subscription:', error);
+            console.error('Failed to load subscription/orders:', error);
         } finally {
             setIsLoading(false);
         }
@@ -832,7 +839,7 @@ const SubscriptionSection: React.FC = () => {
         setIsCancelling(true);
         try {
             await subscriptionService.cancelSubscription(subscription.subId);
-            await loadSubscription();
+            await loadData();
             alert('구독이 성공적으로 해지되었습니다.');
         } catch (error: any) {
             console.error('Cancel subscription failed:', error);
@@ -865,10 +872,10 @@ const SubscriptionSection: React.FC = () => {
 
     return (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-            <h2 className="text-2xl font-extrabold text-gray-900 mb-6">구독 관리</h2>
+            <h2 className="text-2xl font-extrabold text-gray-900 mb-6">구독 관리 및 결제</h2>
 
             {subscription ? (
-                <div className="space-y-6">
+                <div className="space-y-6 mb-8">
                     {/* 현재 구독 정보 */}
                     <div className="bg-gradient-to-br from-emerald-500 to-green-600 rounded-3xl p-8 text-white">
                         <div className="flex items-start justify-between mb-6">
@@ -943,7 +950,7 @@ const SubscriptionSection: React.FC = () => {
                 </div>
             ) : (
                 /* 구독 없음 상태 */
-                <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm">
+                <div className="bg-white rounded-3xl p-12 text-center border border-gray-100 shadow-sm mb-8">
                     <div className="w-20 h-20 mx-auto mb-6 bg-gradient-to-br from-emerald-100 to-green-100 rounded-full flex items-center justify-center">
                         <Crown size={32} className="text-emerald-600" />
                     </div>
@@ -960,6 +967,45 @@ const SubscriptionSection: React.FC = () => {
                     </button>
                 </div>
             )}
+
+            {/* 결제 내역 (주문 내역) */}
+            <h3 className="text-xl font-bold text-gray-900 mb-4">최근 결제 내역</h3>
+            <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm">
+                {orders.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8">결제 내역이 없습니다.</p>
+                ) : (
+                    <div className="space-y-4">
+                        {orders.map((order) => (
+                            <div key={order.orderId} className="flex items-center justify-between p-4 border-b border-gray-50 last:border-0 hover:bg-gray-50 rounded-xl transition-colors">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <p className="font-bold text-gray-900">{order.orderName}</p>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${order.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                                            {order.status === 'COMPLETED' ? '결제완료' : order.status}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-500">
+                                        {new Date(order.createdAt).toLocaleDateString()} · {order.orderUid}
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-bold text-gray-900">{order.totalAmount.toLocaleString()}원</p>
+                                    {order.receiptUrl && (
+                                        <a
+                                            href={order.receiptUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs text-emerald-600 hover:text-emerald-700 underline"
+                                        >
+                                            영수증 보기
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </motion.div>
     );
 };

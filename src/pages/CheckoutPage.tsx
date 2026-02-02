@@ -82,7 +82,7 @@ const CheckoutPage: React.FC = () => {
 
                 // 잠시 후 마이페이지로 이동
                 setTimeout(() => {
-                    navigate('/mypage/credits');
+                    navigate('/mypage/subscription');
                 }, 2000);
 
             } catch (err: any) {
