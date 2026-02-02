@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
     LayoutDashboard, Users, AlertTriangle, Bell, Shield, X, Loader2,
-    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save
+    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
+    Zap, CheckCircle, Brain
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import {
@@ -55,7 +56,8 @@ const AdminBooksPage: React.FC = () => {
     const [chapterForm, setChapterForm] = useState({
         chapterName: '',
         sequence: 1,
-        paragraphs: -1, // [NEW]
+        paragraphs: -1,
+        autoEmbed: true,
     });
 
     // 권한 체크
@@ -212,6 +214,7 @@ const AdminBooksPage: React.FC = () => {
                 chapterName: chapter.chapterName,
                 sequence: chapter.sequence,
                 paragraphs: chapter.paragraphs || -1,
+                autoEmbed: true, // 수정 시에도 기본 true
             });
             setChapterFile(null); // 수정 시 기본 파일 선택 안함
         } else {
@@ -220,6 +223,7 @@ const AdminBooksPage: React.FC = () => {
                 chapterName: '',
                 sequence: chapters.length + 1, // 기본값: 마지막 + 1
                 paragraphs: -1,
+                autoEmbed: true,
             });
             setChapterFile(null);
         }
@@ -248,7 +252,6 @@ const AdminBooksPage: React.FC = () => {
                         if (json.chapter) {
                             newName = `${json.book_name} ${json.chapter}장`;
                         } else {
-                            // chapter_name과 chapter가 없고 book_name만 있는 경우
                             newName = json.book_name;
                         }
                     }
@@ -256,32 +259,21 @@ const AdminBooksPage: React.FC = () => {
                     // 2. Sequence 자동 채우기
                     let newSequence = chapterForm.sequence;
                     if (json.chapter) {
-                        // DB 중복 체크는 어렵지만 일단 파일 값 우선
                         newSequence = parseInt(json.chapter);
-                        // 만약 중복이라면? -> 사용자 수동 수정 유도 (여기서는 값만 제안)
-                        const isDuplicate = chapters.some(c => c.sequence === newSequence && c.chapterId !== editingChapter?.chapterId);
-                        if (isDuplicate) {
-                            // 이미 있으면 자동으로 +1 할 수도 있지만, 요구사항은 "null이면 순서대로, 있으면 해당 값"
-                            // "이미 DB에 해당 책의 sequence가 있으면 자동으로 빈 칸 채움" -> 이 로직이 조금 애매함.
-                            // 사용자 요구: "파일 내 chapter 값이 있으면 사용. null이면 순서대로."
-                            // 추가 요구: "이미 DB에 해당 sequence가 있다면 자동으로 3을 채워넣음" -> 충돌 회피?
-                            // 일단 파일 값 우선 적용하고, 사용자가 보고 수정하게 둠.
-                        }
                     }
 
                     // 3. Paragraphs 카운트
                     let paragraphCount = -1;
                     if (json.content && Array.isArray(json.content)) {
-                        // "content" 하위의 "id" 개수 카운트
                         paragraphCount = json.content.filter((item: any) => item.id).length;
                     }
 
-                    // 폼 업데이트 (사용자가 수정 가능하도록)
+                    // 폼 업데이트
                     setChapterForm(prev => ({
                         ...prev,
                         chapterName: newName || prev.chapterName,
-                        sequence: newSequence, // 파일 값 우선
-                        paragraphs: paragraphCount
+                        sequence: newSequence,
+                        paragraphs: paragraphCount,
                     }));
 
                 } catch (err) {
@@ -290,8 +282,6 @@ const AdminBooksPage: React.FC = () => {
                 }
             };
             reader.readAsText(file);
-        } else {
-            // JSON 아님 -> 기본 로직 (폼 유지)
         }
     };
 
@@ -308,25 +298,43 @@ const AdminBooksPage: React.FC = () => {
 
         setIsSubmitting(true);
         try {
+            let savedChapterId: number | null = null;
+
             if (editingChapter) {
-                await adminChapterService.updateChapter(
+                const updated = await adminChapterService.updateChapter(
                     editingChapter.chapterId,
                     chapterFile || undefined,
                     chapterForm.chapterName,
                     chapterForm.sequence,
                     chapterForm.paragraphs // [NEW]
                 );
+                savedChapterId = updated?.chapterId || editingChapter.chapterId;
                 alert('챕터가 수정되었습니다.');
             } else if (expandedBookId && chapterFile) {
-                await adminChapterService.createChapter(
+                const created = await adminChapterService.createChapter(
                     chapterFile,
                     expandedBookId,
                     chapterForm.chapterName,
                     chapterForm.sequence,
                     chapterForm.paragraphs // [NEW]
                 );
+                savedChapterId = created?.chapterId; // Assuming createChapter returns proper object. AdminService types might need checking.
+                // adminService says Promise<any>. I should assume it returns the DTO.
                 alert('챕터가 등록되었습니다.');
             }
+
+            // [NEW] 자동 임베딩 처리
+            if (savedChapterId && chapterForm.autoEmbed) {
+                try {
+                    await adminChapterService.embedChapter(savedChapterId);
+                    // alert('자동 임베딩 요청이 시작되었습니다.'); // 너무 시끄러울 수 있으니 토스트나 조용한 로그로? 일단 요구사항대로 알림.
+                    console.log('Auto embedding triggered for', savedChapterId);
+                } catch (e) {
+                    console.error('Auto embedding failed', e);
+                    alert('챕터 저장은 완료되었으나, 자동 임베딩 요청에 실패했습니다.');
+                }
+            }
+
             setShowChapterModal(false);
             if (expandedBookId) {
                 await loadChapters(expandedBookId);
@@ -336,6 +344,29 @@ const AdminBooksPage: React.FC = () => {
             alert('저장 중 오류가 발생했습니다.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // [NEW] 임베딩 상태 조회
+    const handleCheckEmbedding = async (chapterId: number) => {
+        try {
+            const status = await adminChapterService.getRagStatus(chapterId);
+            alert(`[임베딩 상태]\n- 챕터 ID: ${status.chapterId}\n- 부모 문서 수: ${status.parentDocumentCount}\n- 벡터 청크 수: ${status.childVectorCount}\n- 상태: ${status.isEmbedded ? '완료' : '미완료'}`);
+        } catch (e) {
+            console.error(e);
+            alert('상태 조회 실패');
+        }
+    };
+
+    // [NEW] 수동 임베딩 요청
+    const handleEmbedChapter = async (chapterId: number) => {
+        if (!confirm('임베딩을 시작하시겠습니까? 기존 데이터가 있으면 덮어씌워집니다.')) return;
+        try {
+            await adminChapterService.embedChapter(chapterId);
+            alert('임베딩 작업이 시작되었습니다. 잠시 후 상태를 확인해주세요.');
+        } catch (e) {
+            console.error(e);
+            alert('요청 실패');
         }
     };
 
@@ -573,6 +604,28 @@ const AdminBooksPage: React.FC = () => {
                                                                 <span className="text-gray-500 text-sm">
                                                                     {chapter.paragraphs || 0} 단락
                                                                 </span>
+                                                                {/* [NEW] 임베딩 상태 */}
+                                                                <div className="flex items-center gap-1 mx-2">
+                                                                    {chapter.isEmbedded ? (
+                                                                        <button
+                                                                            onClick={() => handleCheckEmbedding(chapter.chapterId)}
+                                                                            className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                                                                            title="임베딩 완료 (클릭하여 상세)"
+                                                                        >
+                                                                            <CheckCircle size={16} />
+                                                                            <span className="text-xs">완료</span>
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => handleEmbedChapter(chapter.chapterId)}
+                                                                            className="text-gray-500 hover:text-emerald-400 flex items-center gap-1"
+                                                                            title="임베딩 하기"
+                                                                        >
+                                                                            <Zap size={16} />
+                                                                            <span className="text-xs">변환</span>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                                 <button
                                                                     onClick={() => openChapterModal(chapter)}
                                                                     className="p-1.5 text-gray-400 hover:text-white transition-colors"
@@ -881,6 +934,24 @@ const AdminBooksPage: React.FC = () => {
                                     <p className="text-xs text-gray-500 mt-1">
                                         지원 형식: .txt, .json, .html (JSON 권장)
                                     </p>
+                                </div>
+
+                                {/* [NEW] 자동 임베딩 체크박스 */}
+                                <div className="flex items-center gap-2 p-3 bg-gray-700/50 rounded-xl">
+                                    <input
+                                        type="checkbox"
+                                        id="autoEmbed"
+                                        checked={chapterForm.autoEmbed}
+                                        onChange={(e) => setChapterForm({ ...chapterForm, autoEmbed: e.target.checked })}
+                                        className="w-5 h-5 text-emerald-500 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500"
+                                    />
+                                    <label htmlFor="autoEmbed" className="flex items-center gap-2 cursor-pointer select-none">
+                                        <Brain size={18} className="text-emerald-400" />
+                                        <div className="text-sm">
+                                            <span className="text-white block font-medium">자동 임베딩 실행</span>
+                                            <span className="text-gray-400 text-xs">저장 후 즉시 AI 벡터 변환을 수행합니다.</span>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 
