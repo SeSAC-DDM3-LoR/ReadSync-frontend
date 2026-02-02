@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, BookOpen, Star, Coins, LogOut,
     Edit2, Loader2, MessageSquare, Heart, Zap,
-    X, Camera, Check, CreditCard, Crown
+    X, Camera, Check, CreditCard, Crown, BarChart3, Clock
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -19,11 +19,12 @@ import { subscriptionService, type Subscription } from '../services/subscription
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
 import { GENRES, getGenreLabels } from '../constants/genres';
+import { bookLogService, type BookLog } from '../services/libraryService';
 
 const MyPage: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { user, isAuthenticated, logout, updateUser } = useAuthStore();
+    const { user, isAuthenticated, logout, updateUser, fetchCurrentUser } = useAuthStore();
 
     // Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -31,6 +32,9 @@ const MyPage: React.FC = () => {
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
+        } else {
+            // 마이페이지 진입 시 최신 유저 정보 갱신 (경험치, 레벨 등)
+            fetchCurrentUser();
         }
     }, [isAuthenticated]);
 
@@ -70,7 +74,7 @@ const MyPage: React.FC = () => {
                                 <div className="text-center mb-6 pb-6 border-b border-gray-100">
                                     <div className="w-20 h-20 mx-auto mb-4 rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-400 to-green-500 flex items-center justify-center relative group">
                                         {user.profileImage ? (
-                                            <img src={user.profileImage} alt={user.nickname} className="w-full h-full object-cover" />
+                                            <img src={user.profileImage ?? undefined} alt={user.nickname ?? 'Profile'} className="w-full h-full object-cover" />
                                         ) : (
                                             <span className="text-3xl text-white font-bold">{user.nickname?.charAt(0) || 'U'}</span>
                                         )}
@@ -375,6 +379,7 @@ const EditProfileModal: React.FC<{
 // 프로필 섹션
 const ProfileSection: React.FC<{ user: any; onEdit: () => void }> = ({ user, onEdit }) => {
     const [levels, setLevels] = useState<Level[]>([]);
+    const [bookLogs, setBookLogs] = useState<BookLog[]>([]);
 
     useEffect(() => {
         const loadLevels = async () => {
@@ -387,6 +392,19 @@ const ProfileSection: React.FC<{ user: any; onEdit: () => void }> = ({ user, onE
         };
         loadLevels();
     }, []);
+
+    useEffect(() => {
+        const loadBookLogs = async () => {
+            try {
+                const logs = await bookLogService.getMyBookLogs();
+                setBookLogs(logs);
+            } catch (err) {
+                console.error('Failed to load book logs:', err);
+            }
+        };
+        loadBookLogs();
+    }, []);
+
 
     const expProgress = levels.length > 0
         ? getExpProgress(user.experience || 0, user.levelId || 1, levels)
@@ -462,6 +480,9 @@ const ProfileSection: React.FC<{ user: any; onEdit: () => void }> = ({ user, onE
                 <StatCard icon={<Star className="text-amber-500" />} label="작성 리뷰" value={`${user.reviewCount || 0}개`} />
                 <StatCard icon={<Coins className="text-yellow-500" />} label="씨앗 포인트" value={(user.totalCredit || 0).toLocaleString()} />
             </div>
+
+            {/* 독서 통계 그래프 */}
+            <ReadingStatsGraph bookLogs={bookLogs} />
         </motion.div>
     );
 };
@@ -477,6 +498,135 @@ const StatCard: React.FC<{ icon: React.ReactNode; label: string; value: string }
         </div>
     </div>
 );
+
+// 독서 통계 그래프 섹션
+const ReadingStatsGraph: React.FC<{ bookLogs: BookLog[] }> = ({ bookLogs }) => {
+    // 최근 7일 날짜 배열 생성
+    const getLast7Days = () => {
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            days.push(date.toISOString().split('T')[0]);
+        }
+        return days;
+    };
+
+    const last7Days = getLast7Days();
+
+    // 날짜별 데이터 집계
+    const dailyStats = last7Days.map(date => {
+        const dayLogs = bookLogs.filter(log => log.readDate === date);
+        // readTime은 초 단위로 저장됨 -> 분 단위로 변환
+        const readTimeInSeconds = dayLogs.reduce((sum, log) => sum + (log.readTime || 0), 0);
+        const readTimeInMinutes = Math.round(readTimeInSeconds / 60);
+        return {
+            date,
+            displayDate: new Date(date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }),
+            readTime: readTimeInMinutes,  // 분 단위
+            readParagraph: dayLogs.reduce((sum, log) => sum + (log.readParagraph || 0), 0),
+        };
+    });
+
+    // 최대값 계산 (그래프 비율 계산용)
+    const maxReadTime = Math.max(...dailyStats.map(d => d.readTime), 1);
+    const maxParagraph = Math.max(...dailyStats.map(d => d.readParagraph), 1);
+
+    // 총합 계산
+    const totalReadTime = dailyStats.reduce((sum, d) => sum + d.readTime, 0);
+    const totalParagraphs = dailyStats.reduce((sum, d) => sum + d.readParagraph, 0);
+
+    // 시간 포맷 함수 (분 -> 시간:분)
+    const formatTime = (minutes: number) => {
+        if (minutes < 60) return `${minutes}분`;
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return mins > 0 ? `${hours}시간 ${mins}분` : `${hours}시간`;
+    };
+
+    return (
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 mt-6">
+            <div className="flex items-center gap-2 mb-6">
+                <BarChart3 className="text-emerald-500" size={24} />
+                <h3 className="text-lg font-bold text-gray-900">주간 독서 통계</h3>
+            </div>
+
+            {/* 요약 통계 */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Clock size={16} className="text-emerald-600" />
+                        <span className="text-sm text-emerald-700 font-medium">총 독서 시간</span>
+                    </div>
+                    <p className="text-2xl font-bold text-emerald-800">{formatTime(totalReadTime)}</p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4">
+                    <div className="flex items-center gap-2 mb-1">
+                        <BookOpen size={16} className="text-blue-600" />
+                        <span className="text-sm text-blue-700 font-medium">읽은 문단</span>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-800">{totalParagraphs.toLocaleString()}개</p>
+                </div>
+            </div>
+
+            {/* 일별 독서 시간 바 차트 */}
+            <div className="mb-6">
+                <p className="text-sm font-medium text-gray-600 mb-3">일별 독서 시간</p>
+                <div className="flex items-end justify-between gap-2 h-32">
+                    {dailyStats.map((day, idx) => (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-full flex flex-col items-center justify-end h-24">
+                                <motion.div
+                                    className="w-full bg-gradient-to-t from-emerald-500 to-emerald-400 rounded-t-lg"
+                                    initial={{ height: 0 }}
+                                    animate={{ height: `${(day.readTime / maxReadTime) * 100}%` }}
+                                    transition={{ duration: 0.5, delay: idx * 0.1 }}
+                                    style={{ minHeight: day.readTime > 0 ? '8px' : '0px' }}
+                                />
+                            </div>
+                            <span className="text-xs text-gray-500">{day.displayDate}</span>
+                            {day.readTime > 0 && (
+                                <span className="text-xs font-medium text-emerald-600">{day.readTime}분</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* 일별 읽은 문단 바 차트 */}
+            <div>
+                <p className="text-sm font-medium text-gray-600 mb-3">일별 읽은 문단</p>
+                <div className="flex items-end justify-between gap-2 h-32">
+                    {dailyStats.map((day, idx) => (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-1">
+                            <div className="w-full flex flex-col items-center justify-end h-24">
+                                <motion.div
+                                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t-lg"
+                                    initial={{ height: 0 }}
+                                    animate={{ height: `${(day.readParagraph / maxParagraph) * 100}%` }}
+                                    transition={{ duration: 0.5, delay: idx * 0.1 }}
+                                    style={{ minHeight: day.readParagraph > 0 ? '8px' : '0px' }}
+                                />
+                            </div>
+                            <span className="text-xs text-gray-500">{day.displayDate}</span>
+                            {day.readParagraph > 0 && (
+                                <span className="text-xs font-medium text-blue-600">{day.readParagraph}개</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {bookLogs.length === 0 && (
+                <div className="text-center py-8 text-gray-400">
+                    <BarChart3 size={48} className="mx-auto mb-2 opacity-30" />
+                    <p>아직 독서 기록이 없습니다.</p>
+                    <p className="text-sm">책을 읽으면 이곳에 통계가 표시됩니다.</p>
+                </div>
+            )}
+        </div>
+    );
+};
 
 // 내 리뷰 섹션
 const MyReviewsSection: React.FC = () => {

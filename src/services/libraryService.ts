@@ -115,7 +115,7 @@ export interface BookLog {
     bookLogId: number;
     libraryId: number;
     readDate: string;  // 마지막 읽은 날짜
-    readTime: number;  // 읽은 시간 (분)
+    readTime: number;  // 읽은 시간 (초 단위 - 프론트에서 분 단위로 변환 필요)
     readParagraph: number;  // 읽은 문단 수
 }
 
@@ -133,4 +133,60 @@ export const bookLogService = {
     },
 };
 
+// ==================== Reading Pulse Service (독서 이벤트) ====================
+
+export interface ReadingPulseRequest {
+    libraryId: number;
+    chapterId: number;
+    lastReadPos: number;
+    readParagraphIndices: number[];
+    readTime: number;  // 초 단위
+}
+
+export const readingPulseService = {
+    // 독서 펄스 전송 (5분 주기 또는 페이지 이탈 시)
+    sendPulse: async (request: ReadingPulseRequest): Promise<void> => {
+        await api.post('/v1/reading/pulse', request);
+    },
+
+    // 페이지 이탈 시 펄스 전송 (keepalive 사용)
+    sendPulseOnUnload: (request: ReadingPulseRequest, authToken: string | null): void => {
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+        if (authToken) {
+            headers['Authorization'] = `Bearer ${authToken}`;
+        }
+
+        // fetch with keepalive for page unload scenarios
+        fetch('/api/v1/reading/pulse', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(request),
+            keepalive: true,
+        }).catch(() => {
+            // 페이지 이탈 중이므로 에러 무시
+        });
+    },
+};
+
+// ==================== Enhanced Bookmark Functions ====================
+
+// bookmarkService에 특정 라이브러리+챕터의 북마크 조회 함수 추가
+export const getBookmarkByLibraryAndChapter = async (
+    libraryId: number,
+    chapterId: number
+): Promise<Bookmark | null> => {
+    try {
+        const response = await api.get<PageResponse<Bookmark>>(`/v1/bookmarks/library/${libraryId}`, {
+            params: { page: 0, size: 100 }
+        });
+        // chapterId와 일치하는 북마크 찾기
+        return response.data.content.find(b => b.chapterId === chapterId) || null;
+    } catch {
+        return null;
+    }
+};
+
 export default libraryService;
+

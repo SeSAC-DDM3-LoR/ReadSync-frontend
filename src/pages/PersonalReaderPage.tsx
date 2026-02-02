@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Settings, Search, List,
@@ -28,6 +28,12 @@ import {
     type ChatRoomResponse,
     type ChatMessage
 } from '../services/aiChatService';
+// 독서 이벤트 및 북마크 서비스
+import {
+    readingPulseService,
+    getBookmarkByLibraryAndChapter,
+    type ReadingPulseRequest
+} from '../services/libraryService';
 import useAuthStore from '../stores/authStore';
 
 
@@ -140,6 +146,18 @@ const PersonalReaderPage: React.FC = () => {
     const [newComment, setNewComment] = useState('');
     const [isSpoiler, setIsSpoiler] = useState(false);
     const [isCommentLoading, setIsCommentLoading] = useState(false);
+
+    // 독서 이벤트 추적 (Reading Pulse)
+    const readStartTimeRef = useRef<number>(Date.now());
+    const readParagraphsRef = useRef<Set<number>>(new Set());
+    const pulseIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const currentPageRef = useRef<number>(0);  // 현재 페이지를 ref로 추적하여 의존성 문제 해결
+    const pagesRef = useRef<PageContent[]>([]);  // pages를 ref로 추적하여 callback 의존성 안정화
+    const lastLeftPageFirstParagraphRef = useRef<number>(0);  // 왼쪽 페이지 첫 문단 추적 (fallback용)
+
+    // 마지막 읽은 위치 복원
+    const [initialPosition, setInitialPosition] = useState<number | null>(null);
+    const initialPositionApplied = useRef<boolean>(false);
 
     // AI 채팅: 출처 문단 클릭 핸들러
     const handleNavigateToParagraph = useCallback((paragraphId: string) => {
@@ -314,6 +332,307 @@ const PersonalReaderPage: React.FC = () => {
             return () => container.removeEventListener('wheel', handleWheel);
         }
     }, [currentPage, totalPages]);
+
+    // ==================== Reading Pulse & Position Restoration ====================
+
+    // currentPageRef를 최신 값으로 유지
+    useEffect(() => {
+        currentPageRef.current = currentPage;
+    }, [currentPage]);
+
+    // pagesRef를 최신 값으로 유지 (callback 의존성 안정화)
+    useEffect(() => {
+        pagesRef.current = pages;
+    }, [pages]);
+
+    // 현재 페이지에서 문단 인덱스 추출 헬퍼 함수 (ref 사용하여 의존성 최소화)
+    // 항상 "왼쪽 페이지 첫 문단"을 반환 (일관성 유지)
+    const getCurrentParagraphIndex = useCallback((): number => {
+        const page = currentPageRef.current;
+        const currentPages = pagesRef.current;
+
+
+        // 유효성 검사: pages가 비어있으면 마지막으로 추적된 왼쪽 첫 문단 사용
+        if (!currentPages[page]?.items?.length) {
+
+            return lastLeftPageFirstParagraphRef.current || 0; // 0 = 무효 (저장하지 않음)
+        }
+
+        const firstItem = currentPages[page].items[0];
+
+
+        const match = firstItem.originalId?.match(/p_(\d+)/);
+        return match ? parseInt(match[1]) : 0;
+    }, []);  // 의존성 없음 - ref를 통해 최신 값 접근
+
+    // 현재 페이지의 문단들 추적 + 왼쪽 첫 문단 저장
+    useEffect(() => {
+        if (pages[currentPage]) {
+            // 왼쪽 페이지 첫 문단 추적 (fallback 용)
+            const firstItem = pages[currentPage].items[0];
+            if (firstItem?.originalId) {
+                const match = firstItem.originalId.match(/p_(\d+)/);
+                if (match) {
+                    lastLeftPageFirstParagraphRef.current = parseInt(match[1]);
+                }
+            }
+
+            // 읽은 문단 추적
+            pages[currentPage].items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    readParagraphsRef.current.add(parseInt(match[1]));
+                }
+            });
+        }
+        // 우측 페이지도 추적
+        if (pages[currentPage + 1]) {
+            pages[currentPage + 1].items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    readParagraphsRef.current.add(parseInt(match[1]));
+                }
+            });
+        }
+    }, [currentPage, pages]);
+
+    // 독서 펄스 전송 함수 (의존성 최소화하여 interval 재생성 방지)
+    const sendReadingPulse = useCallback(async () => {
+        if (!libraryId || !chapterId) return;
+
+        const now = Date.now();
+        const readTimeSeconds = Math.floor((now - readStartTimeRef.current) / 1000);
+        const allParagraphs = Array.from(readParagraphsRef.current);
+
+        // 실제 콘텐츠에서 최대 문단 번호 계산 (bookContentData.paragraphs가 부정확할 수 있음)
+        // 우선순위: 1. bookContentData의 paragraphs 2. 현재 페이지 문단 파싱값 3. 넉넉한 기본값(99999)
+        const contentMax = bookContentData?.paragraphs;
+
+        const parsedMax = pagesRef.current.reduce((max, page) => {
+            page.items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    const num = parseInt(match[1]);
+                    if (num > max) max = num;
+                }
+            });
+            return max;
+        }, 0);
+
+        const limit = contentMax || (parsedMax > 0 ? parsedMax : 99999);
+
+        // 유효한 범위(1 ~ limit) 내의 문단만 필터링
+        const paragraphs = allParagraphs.filter(p => p >= 1 && p <= limit);
+
+        const lastReadPos = getCurrentParagraphIndex();
+
+        // [비상 대책] 읽은 문단 목록이 비어있다면, 현재 보고 있는 문단이라도 추가
+        // (타이밍 문제나 데이터 로딩 지연 등으로 문단 수집이 누락되는 경우 방지)
+        if (paragraphs.length === 0 && lastReadPos > 0) {
+            // 중복 방지를 위해 확인 후 추가 (어차피 빈 배열이지만)
+            if (!paragraphs.includes(lastReadPos)) {
+                paragraphs.push(lastReadPos);
+            }
+        }
+
+        // 읽은 시간이 5초 미만이고 문단도 없으면 스킵
+        if (readTimeSeconds < 5 && paragraphs.length === 0) return;
+
+        // 유효하지 않은 위치(0)면 펄스 전송 스킵 (데이터 손상 방지)
+        if (lastReadPos === 0) {
+            return;
+        }
+
+        const request: ReadingPulseRequest = {
+            libraryId: parseInt(libraryId),
+            chapterId: parseInt(chapterId),
+            lastReadPos,
+            readParagraphIndices: paragraphs,
+            readTime: readTimeSeconds
+        };
+
+        try {
+            await readingPulseService.sendPulse(request);
+        } catch (error) {
+            console.error('독서 펄스 전송 실패:', error);
+        }
+
+        // 리셋
+        readStartTimeRef.current = now;
+        readParagraphsRef.current.clear();
+    }, [libraryId, chapterId, getCurrentParagraphIndex]);  // pages 의존성 제거 - pagesRef 사용으로 불필요
+
+    // sendReadingPulse의 최신 버전을 ref로 유지 (interval에서 사용)
+    const sendReadingPulseRef = useRef(sendReadingPulse);
+    useEffect(() => {
+        sendReadingPulseRef.current = sendReadingPulse;
+    }, [sendReadingPulse]);
+
+    // 5분 간격 자동 펄스 전송 (챕터가 바뀔 때만 interval 재생성)
+    useEffect(() => {
+        if (!libraryId || !chapterId) return;
+
+        // 시작 시간 초기화 (챕터 진입 시에만)
+        readStartTimeRef.current = Date.now();
+        readParagraphsRef.current.clear();
+
+        // 5분(300초) 간격으로 펄스 전송
+        pulseIntervalRef.current = setInterval(() => {
+            sendReadingPulseRef.current();  // ref를 통해 최신 함수 호출
+        }, 5 * 60 * 1000);
+
+        return () => {
+            if (pulseIntervalRef.current) {
+                clearInterval(pulseIntervalRef.current);
+            }
+        };
+    }, [libraryId, chapterId]);  // sendReadingPulse 의존성 제거하여 interval 재생성 방지
+
+    // 페이지 이탈 시 펄스 전송
+    // Strict Mode 대응을 위한 cleanup timeout ref
+    const cleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => {
+        // 마운트 시 이전 cleanup timeout 취소 (Strict Mode 재마운트 케이스)
+        if (cleanupTimeoutRef.current) {
+            clearTimeout(cleanupTimeoutRef.current);
+            cleanupTimeoutRef.current = null;
+        }
+
+        const handleBeforeUnload = () => {
+            if (!libraryId || !chapterId) return;
+
+            const now = Date.now();
+            const readTimeSeconds = Math.floor((now - readStartTimeRef.current) / 1000);
+
+            if (readTimeSeconds < 5 && readParagraphsRef.current.size === 0) return;
+
+            const lastReadPos = getCurrentParagraphIndex();
+
+            // 유효하지 않은 위치(0)면 전송 스킵 (데이터 손상 방지)
+            if (lastReadPos === 0) return;
+
+            const request: ReadingPulseRequest = {
+                libraryId: parseInt(libraryId),
+                chapterId: parseInt(chapterId),
+                lastReadPos,
+                readParagraphIndices: Array.from(readParagraphsRef.current),
+                readTime: readTimeSeconds
+            };
+
+            // localStorage에서 토큰 가져오기
+            const token = localStorage.getItem('accessToken');
+            readingPulseService.sendPulseOnUnload(request, token);
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // React Strict Mode에서 두 번 실행되는 것을 방지
+            // setTimeout으로 감싸서 Strict Mode 재마운트와 실제 언마운트 구분
+            // 재마운트 시 위의 clearTimeout으로 취소됨
+
+            // ⚠️ 중요: cleanup 시점에 현재 위치를 캡처! (100ms 후에는 새 챕터 데이터로 덮어쓰여짐)
+            const capturedLastReadPos = getCurrentParagraphIndex();
+            const capturedParagraphs = Array.from(readParagraphsRef.current);
+            const capturedReadTime = Math.floor((Date.now() - readStartTimeRef.current) / 1000);
+
+            cleanupTimeoutRef.current = setTimeout(async () => {
+                // 캡처된 값이 유효한 경우에만 전송
+                if (capturedLastReadPos > 0 && libraryId && chapterId) {
+                    try {
+                        await readingPulseService.sendPulse({
+                            libraryId: parseInt(libraryId),
+                            chapterId: parseInt(chapterId),
+                            lastReadPos: capturedLastReadPos,
+                            readParagraphIndices: capturedParagraphs,
+                            readTime: capturedReadTime
+                        });
+                    } catch (error) {
+                        console.error('[cleanup] 펄스 전송 실패:', error);
+                    }
+                }
+            }, 100);
+        };
+    }, [libraryId, chapterId, getCurrentParagraphIndex]);  // sendReadingPulse 의존성 제거
+
+    // 마지막 읽은 위치 로드
+    useEffect(() => {
+        const loadLastPosition = async () => {
+            if (!libraryId || !chapterId) return;
+
+            // 챕터 변경 시 리셋
+            initialPositionApplied.current = false;
+            setInitialPosition(null);
+
+            try {
+                const bookmark = await getBookmarkByLibraryAndChapter(
+                    parseInt(libraryId),
+                    parseInt(chapterId)
+                );
+
+
+                if (bookmark?.lastReadPos) {
+                    setInitialPosition(bookmark.lastReadPos);
+                }
+            } catch (error) {
+                console.error('북마크 조회 실패:', error);
+            }
+        };
+
+        loadLastPosition();
+    }, [libraryId, chapterId]);
+
+    // 마지막 읽은 위치로 이동
+    useEffect(() => {
+        // isLoading이 false일 때만 시도 (현재 챕터의 페이지가 완전히 로드됨)
+        if (initialPosition && pages.length > 0 && !isLoading && !initialPositionApplied.current) {
+            // 디버그: 현재 페이지들의 문단 범위 확인
+            const allParagraphIds = new Set<number>();
+            pages.forEach(page => {
+                page.items.forEach(item => {
+                    const match = item.originalId?.match(/p_(\d+)/);
+                    if (match) allParagraphIds.add(parseInt(match[1]));
+                });
+            });
+            const sortedIds = Array.from(allParagraphIds).sort((a, b) => a - b);
+            const minId = sortedIds[0] || 0;
+            const maxId = sortedIds[sortedIds.length - 1] || 0;
+
+
+            // 해당 문단이 포함된 모든 페이지 찾기 (분할된 문단 고려)
+            const matchingPages: number[] = [];
+            pages.forEach((page, pageIndex) => {
+                const hasTarget = page.items.some(item => {
+                    const match = item.originalId?.match(/p_(\d+)/);
+                    return match && parseInt(match[1]) === initialPosition;
+                });
+                if (hasTarget) {
+                    matchingPages.push(pageIndex);
+                }
+            });
+
+            if (matchingPages.length > 0) {
+                // 마지막 매칭 페이지 사용 (문단이 분할된 경우 읽던 위치에 더 가까움)
+                const targetPageIndex = matchingPages[matchingPages.length - 1];
+                // 짝수 페이지로 맞추기 (2페이지씩 보여주므로)
+                const finalPage = targetPageIndex % 2 === 0 ? targetPageIndex : Math.max(0, targetPageIndex - 1);
+                setCurrentPage(finalPage);
+                initialPositionApplied.current = true;
+            } else if (initialPosition >= minId && initialPosition <= maxId) {
+                // 범위 내인데 못 찾음 - 데이터 불일치
+                initialPositionApplied.current = true;
+            } else if (initialPosition > maxId) {
+                // 범위 초과 - 마지막 페이지로 이동
+                const lastPage = pages.length - 1;
+                const finalPage = lastPage % 2 === 0 ? lastPage : Math.max(0, lastPage - 1);
+                setCurrentPage(finalPage);
+                initialPositionApplied.current = true;
+            }
+            // else: 아직 페이지 로딩 중일 수 있음 - 다음 렌더에서 재시도
+        }
+    }, [initialPosition, pages, isLoading]);
 
     // ==================== Data Loading ====================
 
@@ -932,10 +1251,25 @@ const PersonalReaderPage: React.FC = () => {
         setCurrentPage(targetPage % 2 === 0 ? targetPage : targetPage - 1);
     };
 
-    const goToChapter = (chapterId: number) => {
-        navigate(`/reader/${libraryId}/${chapterId}`);
+    const goToChapter = async (newChapterId: number) => {
+        // 현재 챕터에서 나가기 전에 펄스 전송
+        await sendReadingPulse();
+
+        navigate(`/reader/${libraryId}/${newChapterId}`);
         setCurrentPage(0);
         setShowRightSidebar(false);
+
+        // 새 챕터 진입 시 초기화
+        initialPositionApplied.current = false;
+        setInitialPosition(null);
+    };
+
+
+
+    const handleExit = async () => {
+        // 나가기 전에 펄스 전송 (데이터 동기화)
+        await sendReadingPulse();
+        navigate('/library');
     };
 
     // ==================== Click Handlers ====================
@@ -1139,14 +1473,14 @@ const PersonalReaderPage: React.FC = () => {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-                            <Link
-                                to="/library"
+                            <button
+                                onClick={handleExit}
                                 className="flex items-center gap-2 hover:opacity-70 transition-opacity"
                                 style={{ color: theme.text }}
                             >
                                 <ChevronLeft size={20} />
                                 <span>서재로</span>
-                            </Link>
+                            </button>
 
                             <div className="flex items-center gap-2">
                                 <span className="text-sm opacity-60">
