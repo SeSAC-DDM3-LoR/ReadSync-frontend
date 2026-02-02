@@ -203,6 +203,19 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
+    const handleProcessEmbedding = async (bookId: number) => {
+        if (!confirm('해당 도서의 모든 챕터에 대해 임베딩을 수행하시겠습니까? (시간이 소요될 수 있습니다)')) {
+            return;
+        }
+        try {
+            await adminBookService.processEmbedding(bookId);
+            alert('임베딩 작업이 시작되었습니다.');
+        } catch (error) {
+            console.error('Failed to start embedding:', error);
+            alert('임베딩 요청 중 오류가 발생했습니다.');
+        }
+    };
+
     // ==================== Chapter CRUD ====================
 
     const toggleChapters = async (bookId: number) => {
@@ -534,6 +547,14 @@ const AdminBooksPage: React.FC = () => {
 
                                     {/* 액션 버튼 */}
                                     <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleProcessEmbedding(book.bookId)}
+                                            className="flex items-center gap-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg text-sm hover:bg-blue-600/30 transition-colors"
+                                            title="전체 챕터 임베딩 생성"
+                                        >
+                                            <Brain size={16} />
+                                            임베딩
+                                        </button>
                                         <button
                                             onClick={() => toggleChapters(book.bookId)}
                                             className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-colors ${expandedBookId === book.bookId

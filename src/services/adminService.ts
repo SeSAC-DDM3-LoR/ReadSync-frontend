@@ -240,6 +240,12 @@ export const adminBookService = {
         });
         return response.data;
     },
+
+    // 도서 벡터 임베딩 (전체 챕터)
+    processEmbedding: async (bookId: number): Promise<string> => {
+        const response = await api.post<string>(`/v1/book-vectors/process/${bookId}`);
+        return response.data;
+    },
 };
 
 // ==================== Admin Chapter Service ====================
