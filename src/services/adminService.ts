@@ -63,11 +63,11 @@ export interface AdminBook {
     bookId: number;
     title: string;
     author: string;
-    publisher: string;
+    publisher: string | null;
     price: number;
     rentalPrice: number;
-    coverUrl: string;
-    description: string;
+    coverUrl: string | null;
+    summary: string | null;
     categoryId: number;
     categoryName?: string;
     createdAt: string;
@@ -76,11 +76,11 @@ export interface AdminBook {
 export interface BookRequest {
     title: string;
     author: string;
-    publisher?: string;
+    publisher?: string | null;
     price: number;
     rentalPrice?: number;
-    coverUrl?: string;
-    description?: string;
+    coverUrl?: string | null;
+    summary?: string | null;
     categoryId?: number;
     isAdultOnly?: boolean;
     viewPermission?: 'FREE' | 'PREMIUM';
@@ -95,6 +95,14 @@ export interface AdminChapter {
     sequence: number;
     bookContentPath: string;
     paragraphs: number;
+    isEmbedded: boolean;
+}
+
+export interface RagStatus {
+    chapterId: number;
+    parentDocumentCount: number;
+    childVectorCount: number;
+    isEmbedded: boolean;
 }
 
 export interface ChapterRequest {
@@ -232,6 +240,12 @@ export const adminBookService = {
         });
         return response.data;
     },
+
+    // 도서 벡터 임베딩 (전체 챕터)
+    processEmbedding: async (bookId: number): Promise<string> => {
+        const response = await api.post<string>(`/v1/book-vectors/process/${bookId}`);
+        return response.data;
+    },
 };
 
 // ==================== Admin Chapter Service ====================
@@ -281,6 +295,7 @@ export const adminChapterService = {
         if (file) formData.append('file', file);
         if (chapterName) formData.append('chapterName', chapterName);
         if (sequence !== undefined) formData.append('sequence', sequence.toString());
+        if (paragraphs !== undefined) formData.append('paragraphs', paragraphs.toString());
 
         const response = await api.put<AdminChapter>(`/v1/chapters/${chapterId}/s3`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
@@ -296,6 +311,18 @@ export const adminChapterService = {
     // 전체 챕터 조회
     getAllChapters: async (): Promise<AdminChapter[]> => {
         const response = await api.get<AdminChapter[]>('/v1/chapters');
+        return response.data;
+    },
+
+    // RAG 임베딩 요청
+    embedChapter: async (chapterId: number): Promise<string> => {
+        const response = await api.post<string>(`/v1/chapters/${chapterId}/rag-embedding`);
+        return response.data;
+    },
+
+    // RAG 임베딩 상태 조회
+    getRagStatus: async (chapterId: number): Promise<RagStatus> => {
+        const response = await api.get<RagStatus>(`/v1/chapters/${chapterId}/rag-status`);
         return response.data;
     },
 };
