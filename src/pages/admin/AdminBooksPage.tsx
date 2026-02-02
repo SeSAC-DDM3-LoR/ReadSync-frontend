@@ -45,7 +45,7 @@ const AdminBooksPage: React.FC = () => {
         price: 0,
         rentalPrice: 0,
         coverUrl: '',
-        description: '',
+        summary: '',
         categoryId: 1,
         isAdultOnly: false,
         viewPermission: 'FREE',
@@ -128,7 +128,7 @@ const AdminBooksPage: React.FC = () => {
                 price: book.price,
                 rentalPrice: book.rentalPrice || 0,
                 coverUrl: book.coverUrl || '',
-                description: book.description || '',
+                summary: book.summary || '',
                 categoryId: book.categoryId || 1,
                 isAdultOnly: false,
                 viewPermission: 'FREE', // 기본값
@@ -144,7 +144,7 @@ const AdminBooksPage: React.FC = () => {
                 price: 0,
                 rentalPrice: 0,
                 coverUrl: '',
-                description: '',
+                summary: '',
                 categoryId: 1,
                 isAdultOnly: false,
                 viewPermission: 'FREE',
@@ -163,11 +163,19 @@ const AdminBooksPage: React.FC = () => {
 
         setIsSubmitting(true);
         try {
+            // 빈 문자열을 null로 변환하여 전송 (DB에 null 저장 위함)
+            const requestData: BookRequest = {
+                ...bookForm,
+                publisher: bookForm.publisher || null,
+                coverUrl: bookForm.coverUrl || null,
+                summary: bookForm.summary || null,
+            };
+
             if (editingBook) {
-                await adminBookService.updateBook(editingBook.bookId, bookForm);
+                await adminBookService.updateBook(editingBook.bookId, requestData);
                 alert('도서가 수정되었습니다.');
             } else {
-                await adminBookService.createBook(bookForm);
+                await adminBookService.createBook(requestData);
                 alert('도서가 등록되었습니다.');
             }
             setShowBookModal(false);
@@ -734,7 +742,7 @@ const AdminBooksPage: React.FC = () => {
                                     <label className="block text-sm text-gray-400 mb-1">출판사</label>
                                     <input
                                         type="text"
-                                        value={bookForm.publisher}
+                                        value={bookForm.publisher || ''}
                                         onChange={(e) => setBookForm({ ...bookForm, publisher: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                     />
@@ -775,7 +783,7 @@ const AdminBooksPage: React.FC = () => {
                                     <label className="block text-sm text-gray-400 mb-1">표지 URL</label>
                                     <input
                                         type="text"
-                                        value={bookForm.coverUrl}
+                                        value={bookForm.coverUrl || ''}
                                         onChange={(e) => setBookForm({ ...bookForm, coverUrl: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                         placeholder="https://..."
@@ -784,8 +792,8 @@ const AdminBooksPage: React.FC = () => {
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">설명</label>
                                     <textarea
-                                        value={bookForm.description}
-                                        onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
+                                        value={bookForm.summary || ''}
+                                        onChange={(e) => setBookForm({ ...bookForm, summary: e.target.value })}
                                         rows={3}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none resize-none"
                                     />

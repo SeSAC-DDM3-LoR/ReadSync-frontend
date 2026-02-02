@@ -63,11 +63,11 @@ export interface AdminBook {
     bookId: number;
     title: string;
     author: string;
-    publisher: string;
+    publisher: string | null;
     price: number;
     rentalPrice: number;
-    coverUrl: string;
-    description: string;
+    coverUrl: string | null;
+    summary: string | null;
     categoryId: number;
     categoryName?: string;
     createdAt: string;
@@ -76,11 +76,11 @@ export interface AdminBook {
 export interface BookRequest {
     title: string;
     author: string;
-    publisher?: string;
+    publisher?: string | null;
     price: number;
     rentalPrice?: number;
-    coverUrl?: string;
-    description?: string;
+    coverUrl?: string | null;
+    summary?: string | null;
     categoryId?: number;
     isAdultOnly?: boolean;
     viewPermission?: 'FREE' | 'PREMIUM';
