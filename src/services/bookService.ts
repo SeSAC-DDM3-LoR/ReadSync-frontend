@@ -98,7 +98,19 @@ export const bookService = {
         const response = await api.get<Book[]>('/v1/books/purchased');
         return response.data;
     },
+
+    // 취향 기반 도서 추천
+    getRecommendedBooks: async (page = 0, size = 6): Promise<PageResponse<BookRecommendation>> => {
+        const response = await api.get<PageResponse<BookRecommendation>>('/v1/book-vectors/search', {
+            params: { page, size },
+        });
+        return response.data;
+    },
 };
+
+export interface BookRecommendation extends Book {
+    score: number;
+}
 
 // ==================== Category Service ====================
 

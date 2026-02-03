@@ -50,11 +50,25 @@ const RecommendedBookSection: React.FC<{
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
-        const response = await bookService.getBooks(0, 30);
-        const shuffled = [...response.content].sort(() => 0.5 - Math.random());
-        setRecommendations(shuffled);
+        // [변경] 진짜 추천 API 호출 (내가 보유한 책 제외됨)
+        const response = await bookService.getRecommendedBooks(0, 10);
+
+        if (response.content.length > 0) {
+          setRecommendations(response.content);
+        } else {
+          // 추천 결과가 없으면 (Cold Start) 기존처럼 랜덤 노출
+          throw new Error("No recommendations found");
+        }
       } catch (err) {
-        console.error("Failed to load recommendations", err);
+        console.warn("Failed to load personal recommendations, falling back to random.", err);
+        try {
+          // Fallback: 전체 도서 랜덤
+          const response = await bookService.getBooks(0, 30);
+          const shuffled = [...response.content].sort(() => 0.5 - Math.random());
+          setRecommendations(shuffled);
+        } catch (fallbackErr) {
+          console.error("Failed to load fallback books", fallbackErr);
+        }
       } finally {
         setLoading(false);
       }
