@@ -257,6 +257,39 @@ class WebSocketClient {
     }
 
     /**
+     * [추가] 방 설정/싱크 메시지 전송
+     * TtsRoomPage.tsx에서 호출하는 함수입니다.
+     */
+    sendRoomMessage(roomId: number, payload: any): void {
+        if (!this.client || this.connectionStatus !== 'CONNECTED') {
+            console.error('❌ [WebSocket] Cannot send room message - not connected');
+            return;
+        }
+
+        // 주의: 백엔드 컨트롤러의 @MessageMapping 경로와 일치시켜야 합니다.
+        // 예시: @MessageMapping("/room/sync") 라면 -> /app/room/sync
+        const destination = '/app/room/sync'; 
+
+        // 만약 방 ID가 경로에 포함되어야 한다면 아래처럼 수정하세요:
+        // const destination = `/app/room/${roomId}/sync`;
+
+        const message = {
+            roomId: roomId,
+            ...payload
+        };
+
+        try {
+            this.client.publish({
+                destination: destination,
+                body: JSON.stringify(message),
+            });
+            console.log(`✅ [WebSocket] Room message sent to ${destination}:`, message);
+        } catch (error) {
+            console.error('❌ [WebSocket] Failed to send room message:', error);
+        }
+    }
+
+    /**
      * Kick 상태 초기화 (다른 방 입장 시)
      */
     clearKickStatus(roomId: number): void {

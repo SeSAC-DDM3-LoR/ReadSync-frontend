@@ -22,7 +22,7 @@ import ReaderPage from './pages/ReaderPage';
 import PersonalReaderPage from './pages/PersonalReaderPage';
 import CheckoutPage from './pages/CheckoutPage';
 import AiChatPage from './pages/AiChatPage';
-import TtsRoomPage from './pages/TtsRoomPage';
+import TtsRoomPage from './pages/tts/TtsRoomPage';
 import SubscriptionStorePage from './pages/SubscriptionStorePage';
 
 // 관리자 페이지
