@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, Check, X, Loader2, Users, BookOpen } from 'lucide-react';
@@ -19,8 +19,8 @@ const NotificationDropdown: React.FC = () => {
     // 총 알림 개수
     const totalNotifications = roomInvitations.length + friendRequests.length;
 
-    // 알림 데이터 로드
-    const loadNotifications = async () => {
+    // 알림 데이터 로드 - useCallback으로 메모이제이션
+    const loadNotifications = useCallback(async () => {
         setIsLoading(true);
         try {
             const [invitations, requests] = await Promise.all([
@@ -34,35 +34,40 @@ const NotificationDropdown: React.FC = () => {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, []); // 외부 의존성 없음
 
     // WebSocket 실시간 알림 구독
     useEffect(() => {
-        if (user?.userId) {
-            const token = localStorage.getItem('accessToken');
-            if (token && !websocketClient.isConnected()) {
-                websocketClient.connect(token).then(() => {
-                    websocketClient.subscribeToInvitations(user.userId, (invitation) => {
-                        console.log('New invitation received:', invitation);
-                        loadNotifications(); // 새 초대 시 목록 갱신
-                    });
-                }).catch(err => {
-                    console.error('WebSocket connection failed:', err);
-                });
-            } else if (websocketClient.isConnected()) {
+        if (!user?.userId) return;
+
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+
+        const setupWebSocket = async () => {
+            try {
+                // WebSocket 연결 (이미 연결되어 있으면 재연결하지 않음)
+                if (!websocketClient.isConnected()) {
+                    await websocketClient.connect(token);
+                }
+
+                // 초대 알림 구독 (중복 구독 방지를 위해 한 번만 설정)
                 websocketClient.subscribeToInvitations(user.userId, (invitation) => {
                     console.log('New invitation received:', invitation);
-                    loadNotifications();
+                    loadNotifications(); // 새 초대 시 목록 갱신
                 });
+            } catch (err) {
+                console.error('WebSocket setup failed:', err);
             }
-        }
+        };
+
+        setupWebSocket();
 
         return () => {
             if (user?.userId) {
                 websocketClient.unsubscribeFromInvitations(user.userId);
             }
         };
-    }, [user?.userId]);
+    }, [user?.userId, loadNotifications]); // loadNotifications 의존성 추가
 
     // 드롭다운 열릴 때 데이터 로드
     useEffect(() => {
