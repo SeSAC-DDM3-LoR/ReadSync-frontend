@@ -128,7 +128,7 @@ class WebSocketClient {
             return;
         }
 
-        const destination = `/topic/chat/${roomId}`;
+        const destination = `/topic/chatroom/${roomId}`;
 
         // 이미 구독 중인지 확인
         if (this.subscriptions.has(destination)) {
@@ -163,14 +163,17 @@ class WebSocketClient {
         onStatusChange: (status: any) => void,
         onKick?: () => void
     ): void {
+        console.log(`[WebSocket] 🎯 Attempting to subscribe to room status for room ${roomId}`);
+        console.log(`[WebSocket] Connection status: ${this.connectionStatus}`);
+
         if (!this.client || this.connectionStatus !== 'CONNECTED') {
-            console.error('WebSocket is not connected');
+            console.error('❌ [WebSocket] Cannot subscribe to room status - not connected');
             return;
         }
 
         // Kick된 방인지 확인
         if (this.kickedRooms.has(roomId)) {
-            console.warn(`You have been kicked from room ${roomId}`);
+            console.warn(`⚠️ [WebSocket] You have been kicked from room ${roomId}`);
             if (onKick) onKick();
             return;
         }
@@ -178,29 +181,55 @@ class WebSocketClient {
         const destination = `/topic/room/${roomId}/status`;
 
         if (this.subscriptions.has(destination)) {
-            console.warn(`Already subscribed to ${destination}`);
+            console.warn(`⚠️ [WebSocket] Already subscribed to ${destination}`);
             return;
         }
 
-        const subscription = this.client.subscribe(destination, (message: IMessage) => {
-            try {
-                const statusUpdate = JSON.parse(message.body);
+        try {
+            const subscription = this.client.subscribe(destination, (message: IMessage) => {
+                console.log(`📨 [WebSocket] RAW MESSAGE received from ${destination}:`, message.body);
 
-                // Kick 이벤트 처리
-                if (statusUpdate.type === 'KICK') {
-                    this.kickedRooms.add(roomId);
-                    this.unsubscribeFromRoom(roomId);
-                    if (onKick) onKick();
-                    return;
+                try {
+                    const statusUpdate = JSON.parse(message.body);
+                    console.log(`📋 [WebSocket] PARSED MESSAGE:`, statusUpdate);
+                    console.log(`📋 [WebSocket] Message Type:`, statusUpdate.type);
+
+                    // Kick 이벤트 처리
+                    if (statusUpdate.type === 'KICK') {
+                        console.log(`🚫 [WebSocket] KICK event received for room ${roomId}`);
+                        this.kickedRooms.add(roomId);
+                        this.unsubscribeFromRoom(roomId);
+                        if (onKick) onKick();
+                        return;
+                    }
+
+                    // 참여자 업데이트 이벤트
+                    if (statusUpdate.type === 'PARTICIPANT_UPDATE') {
+                        console.log(`👥 [WebSocket] PARTICIPANT_UPDATE event received!`);
+                    }
+
+                    // 상태 변경 이벤트
+                    if (statusUpdate.type === 'STATUS_CHANGE') {
+                        console.log(`▶️ [WebSocket] STATUS_CHANGE event received:`, statusUpdate.status);
+                    }
+
+                    // 문단 싱크 이벤트
+                    if (statusUpdate.type === 'SYNC_PARAGRAPH') {
+                        console.log(`📖 [WebSocket] SYNC_PARAGRAPH event received:`, statusUpdate.paragraphId);
+                    }
+
+                    onStatusChange(statusUpdate);
+                } catch (error) {
+                    console.error('❌ [WebSocket] Failed to parse status update:', error);
+                    console.error('Raw message body:', message.body);
                 }
+            });
 
-                onStatusChange(statusUpdate);
-            } catch (error) {
-                console.error('Failed to parse status update:', error);
-            }
-        });
-
-        this.subscriptions.set(destination, subscription);
+            this.subscriptions.set(destination, subscription);
+            console.log(`✅ [WebSocket] Successfully subscribed to ${destination}`);
+        } catch (error) {
+            console.error(`❌ [WebSocket] Failed to subscribe to ${destination}:`, error);
+        }
     }
 
     /**
@@ -268,7 +297,7 @@ class WebSocketClient {
 
         // 주의: 백엔드 컨트롤러의 @MessageMapping 경로와 일치시켜야 합니다.
         // 예시: @MessageMapping("/room/sync") 라면 -> /app/room/sync
-        const destination = '/app/room/sync'; 
+        const destination = '/app/room/sync';
 
         // 만약 방 ID가 경로에 포함되어야 한다면 아래처럼 수정하세요:
         // const destination = `/app/room/${roomId}/sync`;

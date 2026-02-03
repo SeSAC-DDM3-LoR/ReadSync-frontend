@@ -9,7 +9,7 @@ export interface ReadingRoom {
     hostName: string;
     bookTitle: string;
     status: 'WAITING' | 'PLAYING' | 'PAUSED' | 'FINISHED';
-    voiceType: 'SEONBI' | 'PREMIUM';
+    voiceType: 'SEONBI' | 'BORAM' | 'YUNA' | 'KYEON' | 'BITNA';
     playSpeed: number;
     maxCapacity: number;
     currentParticipants: number;
@@ -20,7 +20,7 @@ export interface CreateRoomRequest {
     libraryId?: number;
     bookId?: number;  // 프론트엔드에서 처리용
     roomName: string;
-    voiceType?: 'SEONBI' | 'PREMIUM';
+    voiceType?: 'SEONBI' | 'BORAM' | 'YUNA' | 'KYEON' | 'BITNA';
     ttsVoice?: string;  // TTS 목소리 ID
     ttsSpeed?: number;  // TTS 속도
     maxCapacity?: number;
