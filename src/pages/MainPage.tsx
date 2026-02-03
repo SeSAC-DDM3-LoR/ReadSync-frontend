@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import useAuthStore from '../stores/authStore';
@@ -10,9 +10,119 @@ import { creditService } from '../services/userService';
 import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
 import type { Level } from '../services/levelService';
 import {
-  Book, Trophy, Coins, ChevronRight, ChevronLeft, Leaf, Sparkles,
+  ThumbsUp, Book, Trophy, Coins, ChevronRight, ChevronLeft, Leaf, Sparkles,
   Zap, Crown, BookOpen, TreeDeciduous, Volume2, Loader
 } from 'lucide-react';
+
+const RecommendedBookCard: React.FC<{
+  book: BookType;
+  onClick: () => void;
+}> = ({ book, onClick }) => (
+  <motion.div
+    className="w-full bg-white rounded-xl overflow-hidden cursor-pointer border border-emerald-100 shadow-sm hover:shadow-md transition-all relative group"
+    onClick={onClick}
+    whileHover={{ y: -5 }}
+  >
+    <div className="h-48 bg-emerald-50 flex items-center justify-center relative overflow-hidden">
+      {book.coverUrl ? (
+        <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
+      ) : (
+        <Book size={48} className="text-emerald-200" />
+      )}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+    </div>
+    <div className="p-3">
+      <h4 className="font-bold text-gray-800 text-sm truncate">{book.title}</h4>
+      <p className="text-xs text-gray-500 truncate mt-1">{book.author}</p>
+    </div>
+  </motion.div>
+);
+
+const RecommendedBookSection: React.FC<{
+  userNickname: string;
+  onClickBook: (bookId: number) => void;
+}> = ({ userNickname, onClickBook }) => {
+  const [recommendations, setRecommendations] = useState<BookType[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const ITEMS_PER_VIEW = 6;
+
+  useEffect(() => {
+    const fetchRecommendations = async () => {
+      try {
+        const response = await bookService.getBooks(0, 30);
+        const shuffled = [...response.content].sort(() => 0.5 - Math.random());
+        setRecommendations(shuffled);
+      } catch (err) {
+        console.error("Failed to load recommendations", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchRecommendations();
+  }, []);
+
+  const handleNext = () => {
+    setCurrentIndex((prev) => (prev + ITEMS_PER_VIEW) % recommendations.length);
+  };
+
+  const handlePrev = () => {
+    setCurrentIndex((prev) => (prev - ITEMS_PER_VIEW + recommendations.length) % recommendations.length);
+  };
+
+  const visibleBooks = recommendations.slice(currentIndex, currentIndex + ITEMS_PER_VIEW);
+  if (visibleBooks.length < ITEMS_PER_VIEW && recommendations.length > 0) {
+    visibleBooks.push(...recommendations.slice(0, ITEMS_PER_VIEW - visibleBooks.length));
+  }
+
+  if (loading || recommendations.length === 0) return null;
+
+  return (
+    <motion.section
+      className="mb-12 relative"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+    >
+      <div className="flex items-center justify-between mb-4 px-2">
+        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <ThumbsUp size={24} className="text-amber-500" />
+          <span className="text-emerald-700 text-2xl font-extrabold">{userNickname}</span>님을 위한 추천 도서
+        </h3>
+        <div className="flex gap-2">
+          <button
+            onClick={handlePrev}
+            className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <button
+            onClick={handleNext}
+            className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+          >
+            <ChevronRight size={18} />
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 py-2 px-1">
+        <AnimatePresence mode='wait'>
+          {visibleBooks.map((book, idx) => (
+            <motion.div
+              key={`${book.bookId}-${currentIndex}-${idx}`}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3, delay: idx * 0.05 }}
+            >
+              <RecommendedBookCard book={book} onClick={() => onClickBook(book.bookId)} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </motion.section>
+  );
+};
 
 // 이미지 Assets
 import cloudImg from '../assets/cloud.png';
@@ -587,6 +697,15 @@ const MainPage: React.FC = () => {
             )}
           </motion.div>
         </div>
+
+
+        {/* --- 추천 도서 섹션 (로그인 시에만) --- */}
+        {user && (
+          <RecommendedBookSection
+            userNickname={user.nickname || "사용자"}
+            onClickBook={(bookId) => navigate(`/books/${bookId}`)}
+          />
+        )}
 
 
         {/* --- 최근 책 목록 --- */}

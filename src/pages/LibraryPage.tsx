@@ -151,6 +151,13 @@ const LibraryCard: React.FC<{ book: LibraryType; index: number }> = ({ book, ind
 
     // 읽기 버튼 클릭 핸들러
     const handleReadClick = async () => {
+        // 1. 마지막으로 읽은 챕터가 있으면 해당 챕터로 이동
+        if (book.lastReadChapterId) {
+            navigate(`/reader/${book.libraryId}/${book.lastReadChapterId}`);
+            return;
+        }
+
+        // 2. 없으면 첫 번째 챕터로 이동
         if (firstChapterId) {
             navigate(`/reader/${book.libraryId}/${firstChapterId}`);
         } else {

@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
     LayoutDashboard, Users, AlertTriangle, Bell, Shield, X, Loader2,
-    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save
+    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
+    Zap, CheckCircle, Brain
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import {
@@ -44,13 +45,19 @@ const AdminBooksPage: React.FC = () => {
         price: 0,
         rentalPrice: 0,
         coverUrl: '',
-        description: '',
+        summary: '',
         categoryId: 1,
+        isAdultOnly: false,
+        viewPermission: 'FREE',
+        language: 'ko',
+        publishedDate: '',
     });
 
     const [chapterForm, setChapterForm] = useState({
         chapterName: '',
         sequence: 1,
+        paragraphs: -1,
+        autoEmbed: true,
     });
 
     // 권한 체크
@@ -121,8 +128,12 @@ const AdminBooksPage: React.FC = () => {
                 price: book.price,
                 rentalPrice: book.rentalPrice || 0,
                 coverUrl: book.coverUrl || '',
-                description: book.description || '',
+                summary: book.summary || '',
                 categoryId: book.categoryId || 1,
+                isAdultOnly: false,
+                viewPermission: 'FREE', // 기본값
+                language: 'ko',
+                publishedDate: '',
             });
         } else {
             setEditingBook(null);
@@ -133,8 +144,12 @@ const AdminBooksPage: React.FC = () => {
                 price: 0,
                 rentalPrice: 0,
                 coverUrl: '',
-                description: '',
+                summary: '',
                 categoryId: 1,
+                isAdultOnly: false,
+                viewPermission: 'FREE',
+                language: 'ko',
+                publishedDate: '',
             });
         }
         setShowBookModal(true);
@@ -148,11 +163,19 @@ const AdminBooksPage: React.FC = () => {
 
         setIsSubmitting(true);
         try {
+            // 빈 문자열을 null로 변환하여 전송 (DB에 null 저장 위함)
+            const requestData: BookRequest = {
+                ...bookForm,
+                publisher: bookForm.publisher || null,
+                coverUrl: bookForm.coverUrl || null,
+                summary: bookForm.summary || null,
+            };
+
             if (editingBook) {
-                await adminBookService.updateBook(editingBook.bookId, bookForm);
+                await adminBookService.updateBook(editingBook.bookId, requestData);
                 alert('도서가 수정되었습니다.');
             } else {
-                await adminBookService.createBook(bookForm);
+                await adminBookService.createBook(requestData);
                 alert('도서가 등록되었습니다.');
             }
             setShowBookModal(false);
@@ -180,6 +203,19 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
+    const handleProcessEmbedding = async (bookId: number) => {
+        if (!confirm('해당 도서의 모든 챕터에 대해 임베딩을 수행하시겠습니까? (시간이 소요될 수 있습니다)')) {
+            return;
+        }
+        try {
+            await adminBookService.processEmbedding(bookId);
+            alert('임베딩 작업이 시작되었습니다.');
+        } catch (error) {
+            console.error('Failed to start embedding:', error);
+            alert('임베딩 요청 중 오류가 발생했습니다.');
+        }
+    };
+
     // ==================== Chapter CRUD ====================
 
     const toggleChapters = async (bookId: number) => {
@@ -198,16 +234,76 @@ const AdminBooksPage: React.FC = () => {
             setChapterForm({
                 chapterName: chapter.chapterName,
                 sequence: chapter.sequence,
+                paragraphs: chapter.paragraphs || -1,
+                autoEmbed: true, // 수정 시에도 기본 true
             });
+            setChapterFile(null); // 수정 시 기본 파일 선택 안함
         } else {
             setEditingChapter(null);
             setChapterForm({
                 chapterName: '',
-                sequence: chapters.length + 1,
+                sequence: chapters.length + 1, // 기본값: 마지막 + 1
+                paragraphs: -1,
+                autoEmbed: true,
             });
+            setChapterFile(null);
         }
-        setChapterFile(null);
         setShowChapterModal(true);
+    };
+
+    // 파일 선택 핸들러 (스마트 분석)
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setChapterFile(file);
+
+        // JSON 파일 분석
+        if (file.name.endsWith('.json')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const json = JSON.parse(event.target?.result as string);
+
+                    // 1. Chapter Name 자동 채우기
+                    let newName = '';
+                    if (json.chapter_name) {
+                        newName = json.chapter_name;
+                    } else if (json.book_name) {
+                        if (json.chapter) {
+                            newName = `${json.book_name} ${json.chapter}장`;
+                        } else {
+                            newName = json.book_name;
+                        }
+                    }
+
+                    // 2. Sequence 자동 채우기
+                    let newSequence = chapterForm.sequence;
+                    if (json.chapter) {
+                        newSequence = parseInt(json.chapter);
+                    }
+
+                    // 3. Paragraphs 카운트
+                    let paragraphCount = -1;
+                    if (json.content && Array.isArray(json.content)) {
+                        paragraphCount = json.content.filter((item: any) => item.id).length;
+                    }
+
+                    // 폼 업데이트
+                    setChapterForm(prev => ({
+                        ...prev,
+                        chapterName: newName || prev.chapterName,
+                        sequence: newSequence,
+                        paragraphs: paragraphCount,
+                    }));
+
+                } catch (err) {
+                    console.error("JSON parsing error:", err);
+                    alert("파일 내용을 분석할 수 없습니다. 수동으로 입력해주세요.");
+                }
+            };
+            reader.readAsText(file);
+        }
     };
 
     const handleSaveChapter = async () => {
@@ -223,23 +319,43 @@ const AdminBooksPage: React.FC = () => {
 
         setIsSubmitting(true);
         try {
+            let savedChapterId: number | null = null;
+
             if (editingChapter) {
-                await adminChapterService.updateChapter(
+                const updated = await adminChapterService.updateChapter(
                     editingChapter.chapterId,
                     chapterFile || undefined,
                     chapterForm.chapterName,
-                    chapterForm.sequence
+                    chapterForm.sequence,
+                    chapterForm.paragraphs // [NEW]
                 );
+                savedChapterId = updated?.chapterId || editingChapter.chapterId;
                 alert('챕터가 수정되었습니다.');
             } else if (expandedBookId && chapterFile) {
-                await adminChapterService.createChapter(
+                const created = await adminChapterService.createChapter(
                     chapterFile,
                     expandedBookId,
                     chapterForm.chapterName,
-                    chapterForm.sequence
+                    chapterForm.sequence,
+                    chapterForm.paragraphs // [NEW]
                 );
+                savedChapterId = created?.chapterId; // Assuming createChapter returns proper object. AdminService types might need checking.
+                // adminService says Promise<any>. I should assume it returns the DTO.
                 alert('챕터가 등록되었습니다.');
             }
+
+            // [NEW] 자동 임베딩 처리
+            if (savedChapterId && chapterForm.autoEmbed) {
+                try {
+                    await adminChapterService.embedChapter(savedChapterId);
+                    // alert('자동 임베딩 요청이 시작되었습니다.'); // 너무 시끄러울 수 있으니 토스트나 조용한 로그로? 일단 요구사항대로 알림.
+                    console.log('Auto embedding triggered for', savedChapterId);
+                } catch (e) {
+                    console.error('Auto embedding failed', e);
+                    alert('챕터 저장은 완료되었으나, 자동 임베딩 요청에 실패했습니다.');
+                }
+            }
+
             setShowChapterModal(false);
             if (expandedBookId) {
                 await loadChapters(expandedBookId);
@@ -249,6 +365,29 @@ const AdminBooksPage: React.FC = () => {
             alert('저장 중 오류가 발생했습니다.');
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // [NEW] 임베딩 상태 조회
+    const handleCheckEmbedding = async (chapterId: number) => {
+        try {
+            const status = await adminChapterService.getRagStatus(chapterId);
+            alert(`[임베딩 상태]\n- 챕터 ID: ${status.chapterId}\n- 부모 문서 수: ${status.parentDocumentCount}\n- 벡터 청크 수: ${status.childVectorCount}\n- 상태: ${status.isEmbedded ? '완료' : '미완료'}`);
+        } catch (e) {
+            console.error(e);
+            alert('상태 조회 실패');
+        }
+    };
+
+    // [NEW] 수동 임베딩 요청
+    const handleEmbedChapter = async (chapterId: number) => {
+        if (!confirm('임베딩을 시작하시겠습니까? 기존 데이터가 있으면 덮어씌워집니다.')) return;
+        try {
+            await adminChapterService.embedChapter(chapterId);
+            alert('임베딩 작업이 시작되었습니다. 잠시 후 상태를 확인해주세요.');
+        } catch (e) {
+            console.error(e);
+            alert('요청 실패');
         }
     };
 
@@ -300,8 +439,8 @@ const AdminBooksPage: React.FC = () => {
                                 key={item.path}
                                 to={item.path}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${item.active
-                                        ? 'bg-emerald-500/20 text-emerald-400'
-                                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                                     }`}
                             >
                                 <Icon size={20} />
@@ -409,10 +548,18 @@ const AdminBooksPage: React.FC = () => {
                                     {/* 액션 버튼 */}
                                     <div className="flex items-center gap-2">
                                         <button
+                                            onClick={() => handleProcessEmbedding(book.bookId)}
+                                            className="flex items-center gap-1 px-3 py-2 bg-blue-600/20 text-blue-400 rounded-lg text-sm hover:bg-blue-600/30 transition-colors"
+                                            title="전체 챕터 임베딩 생성"
+                                        >
+                                            <Brain size={16} />
+                                            임베딩
+                                        </button>
+                                        <button
                                             onClick={() => toggleChapters(book.bookId)}
                                             className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm transition-colors ${expandedBookId === book.bookId
-                                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                                ? 'bg-emerald-500/20 text-emerald-400'
+                                                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                                 }`}
                                         >
                                             <FileText size={16} />
@@ -486,6 +633,28 @@ const AdminBooksPage: React.FC = () => {
                                                                 <span className="text-gray-500 text-sm">
                                                                     {chapter.paragraphs || 0} 단락
                                                                 </span>
+                                                                {/* [NEW] 임베딩 상태 */}
+                                                                <div className="flex items-center gap-1 mx-2">
+                                                                    {chapter.isEmbedded ? (
+                                                                        <button
+                                                                            onClick={() => handleCheckEmbedding(chapter.chapterId)}
+                                                                            className="text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                                                                            title="임베딩 완료 (클릭하여 상세)"
+                                                                        >
+                                                                            <CheckCircle size={16} />
+                                                                            <span className="text-xs">완료</span>
+                                                                        </button>
+                                                                    ) : (
+                                                                        <button
+                                                                            onClick={() => handleEmbedChapter(chapter.chapterId)}
+                                                                            className="text-gray-500 hover:text-emerald-400 flex items-center gap-1"
+                                                                            title="임베딩 하기"
+                                                                        >
+                                                                            <Zap size={16} />
+                                                                            <span className="text-xs">변환</span>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                                 <button
                                                                     onClick={() => openChapterModal(chapter)}
                                                                     className="p-1.5 text-gray-400 hover:text-white transition-colors"
@@ -594,7 +763,7 @@ const AdminBooksPage: React.FC = () => {
                                     <label className="block text-sm text-gray-400 mb-1">출판사</label>
                                     <input
                                         type="text"
-                                        value={bookForm.publisher}
+                                        value={bookForm.publisher || ''}
                                         onChange={(e) => setBookForm({ ...bookForm, publisher: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                     />
@@ -619,11 +788,23 @@ const AdminBooksPage: React.FC = () => {
                                         />
                                     </div>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="isAdultOnly"
+                                        checked={bookForm.isAdultOnly || false}
+                                        onChange={(e) => setBookForm({ ...bookForm, isAdultOnly: e.target.checked })}
+                                        className="w-4 h-4 text-emerald-500 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500"
+                                    />
+                                    <label htmlFor="isAdultOnly" className="text-sm text-gray-400">
+                                        성인 전용
+                                    </label>
+                                </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">표지 URL</label>
                                     <input
                                         type="text"
-                                        value={bookForm.coverUrl}
+                                        value={bookForm.coverUrl || ''}
                                         onChange={(e) => setBookForm({ ...bookForm, coverUrl: e.target.value })}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                         placeholder="https://..."
@@ -632,10 +813,43 @@ const AdminBooksPage: React.FC = () => {
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">설명</label>
                                     <textarea
-                                        value={bookForm.description}
-                                        onChange={(e) => setBookForm({ ...bookForm, description: e.target.value })}
+                                        value={bookForm.summary || ''}
+                                        onChange={(e) => setBookForm({ ...bookForm, summary: e.target.value })}
                                         rows={3}
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none resize-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">언어</label>
+                                    <select
+                                        value={bookForm.language}
+                                        onChange={(e) => setBookForm({ ...bookForm, language: e.target.value })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                    >
+                                        <option value="ko">한국어</option>
+                                        <option value="en">English</option>
+                                        <option value="ja">Japanese</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">열람 권한</label>
+                                    <select
+                                        value={bookForm.viewPermission}
+                                        onChange={(e) => setBookForm({ ...bookForm, viewPermission: e.target.value as 'FREE' | 'PREMIUM' })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                    >
+                                        <option value="FREE">무료</option>
+                                        <option value="PREMIUM">유료 (구매 필요)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">출판일</label>
+                                    <input
+                                        type="date"
+                                        value={bookForm.publishedDate || ''}
+                                        onChange={(e) => setBookForm({ ...bookForm, publishedDate: e.target.value })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                     />
                                 </div>
                             </div>
@@ -717,6 +931,21 @@ const AdminBooksPage: React.FC = () => {
                                 </div>
                                 <div>
                                     <label className="block text-sm text-gray-400 mb-1">
+                                        문단 수 (자동 추출)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={chapterForm.paragraphs}
+                                        onChange={(e) => setChapterForm({ ...chapterForm, paragraphs: parseInt(e.target.value) || -1 })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                        readOnly={false} // 수정 가능
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        JSON 파일 업로드 시 자동 계산됩니다. (-1: 정보 없음/자동추출 실패)
+                                    </p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">
                                         콘텐츠 파일 {!editingChapter && '*'}
                                     </label>
                                     <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-emerald-500 transition-colors">
@@ -727,13 +956,31 @@ const AdminBooksPage: React.FC = () => {
                                         <input
                                             type="file"
                                             accept=".txt,.json,.html"
-                                            onChange={(e) => setChapterFile(e.target.files?.[0] || null)}
+                                            onChange={handleFileChange} // [UPDATED]
                                             className="hidden"
                                         />
                                     </label>
                                     <p className="text-xs text-gray-500 mt-1">
-                                        지원 형식: .txt, .json, .html
+                                        지원 형식: .txt, .json, .html (JSON 권장)
                                     </p>
+                                </div>
+
+                                {/* [NEW] 자동 임베딩 체크박스 */}
+                                <div className="flex items-center gap-2 p-3 bg-gray-700/50 rounded-xl">
+                                    <input
+                                        type="checkbox"
+                                        id="autoEmbed"
+                                        checked={chapterForm.autoEmbed}
+                                        onChange={(e) => setChapterForm({ ...chapterForm, autoEmbed: e.target.checked })}
+                                        className="w-5 h-5 text-emerald-500 bg-gray-700 border-gray-600 rounded focus:ring-emerald-500"
+                                    />
+                                    <label htmlFor="autoEmbed" className="flex items-center gap-2 cursor-pointer select-none">
+                                        <Brain size={18} className="text-emerald-400" />
+                                        <div className="text-sm">
+                                            <span className="text-white block font-medium">자동 임베딩 실행</span>
+                                            <span className="text-gray-400 text-xs">저장 후 즉시 AI 벡터 변환을 수행합니다.</span>
+                                        </div>
+                                    </label>
                                 </div>
                             </div>
 
@@ -761,7 +1008,7 @@ const AdminBooksPage: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 

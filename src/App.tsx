@@ -82,6 +82,7 @@ function App() {
         <Route path="/mypage/comments" element={<MyPage />} />
         <Route path="/mypage/exp" element={<MyPage />} />
         <Route path="/mypage/credits" element={<MyPage />} />
+        <Route path="/mypage/subscription" element={<MyPage />} />
 
         {/* 공지 & 문의 */}
         <Route path="/notices" element={<NoticesPage />} />

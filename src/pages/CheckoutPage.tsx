@@ -54,6 +54,9 @@ const CheckoutPage: React.FC = () => {
     const discountAmount = 0;
     const finalAmount = totalAmount - discountAmount;
 
+    // 결제 확인 중복 방지 Ref
+    const isConfirmingRef = useRef(false);
+
     // 결제 리다이렉트 처리
     const processPaymentRedirect = useCallback(async () => {
         const paymentKey = searchParams.get('paymentKey');
@@ -64,6 +67,10 @@ const CheckoutPage: React.FC = () => {
 
         // 결제 성공 리다이렉트
         if (paymentKey && orderId && amount) {
+            // 이미 확인 중이면 중복 실행 방지
+            if (isConfirmingRef.current) return true;
+            isConfirmingRef.current = true;
+
             setIsProcessing(true);
             try {
                 await paymentService.confirmPayment({
@@ -82,13 +89,14 @@ const CheckoutPage: React.FC = () => {
 
                 // 잠시 후 마이페이지로 이동
                 setTimeout(() => {
-                    navigate('/mypage/credits');
+                    navigate('/mypage/subscription');
                 }, 2000);
 
             } catch (err: any) {
                 console.error('Payment confirmation failed:', err);
                 setError(err.response?.data?.message || '결제 승인 중 오류가 발생했습니다.');
                 window.history.replaceState({}, '', window.location.pathname);
+                isConfirmingRef.current = false; // 실패 시 재시도 가능하게 할지 여부는 정책에 따름 (여기서는 해제)
             } finally {
                 setIsProcessing(false);
             }
