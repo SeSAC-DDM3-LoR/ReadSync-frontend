@@ -51,11 +51,21 @@ const UserProfilePopup: React.FC<UserProfilePopupProps> = ({
         try {
             await friendshipService.sendRequest(profile.userId);
             setRequestSent(true);
+            alert('친구 요청을 보냈습니다!');
         } catch (err: any) {
-            if (err.response?.status === 409) {
+            console.error('Failed to send friend request:', err);
+            const status = err.response?.status;
+            const errorMessage = err.response?.data?.message || err.message;
+
+            if (status === 409) {
+                // 이미 요청을 보낸 경우
                 setRequestSent(true);
+                alert('이미 친구 요청을 보냈거나 친구 관계입니다.');
+            } else if (status === 400) {
+                // 잘못된 요청 (예: 차단된 사용자, 본인에게 요청 등)
+                alert(errorMessage || '친구 요청을 보낼 수 없습니다.');
             } else {
-                console.error('Failed to send friend request:', err);
+                alert('친구 요청 전송에 실패했습니다. 다시 시도해주세요.');
             }
         } finally {
             setIsSendingRequest(false);
@@ -174,8 +184,8 @@ const UserProfilePopup: React.FC<UserProfilePopupProps> = ({
                                                 onClick={handleSendFriendRequest}
                                                 disabled={isSendingRequest || requestSent}
                                                 className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium transition-all ${requestSent
-                                                        ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
-                                                        : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90'
+                                                    ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                                                    : 'bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:opacity-90'
                                                     }`}
                                             >
                                                 {isSendingRequest ? (

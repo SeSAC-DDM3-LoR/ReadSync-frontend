@@ -9,7 +9,7 @@ export interface ReadingRoom {
     hostName: string;
     bookTitle: string;
     status: 'WAITING' | 'PLAYING' | 'PAUSED' | 'FINISHED';
-    voiceType: 'BASIC' | 'PREMIUM';
+    voiceType: 'SEONBI' | 'PREMIUM';
     playSpeed: number;
     maxCapacity: number;
     currentParticipants: number;
@@ -20,7 +20,7 @@ export interface CreateRoomRequest {
     libraryId?: number;
     bookId?: number;  // 프론트엔드에서 처리용
     roomName: string;
-    voiceType?: 'BASIC' | 'PREMIUM';
+    voiceType?: 'SEONBI' | 'PREMIUM';
     ttsVoice?: string;  // TTS 목소리 ID
     ttsSpeed?: number;  // TTS 속도
     maxCapacity?: number;
@@ -73,20 +73,23 @@ export const readingRoomService = {
     },
 
     // 재생 속도 변경 (방장 전용)
-    updatePlaySpeed: async (roomId: number, speed: number): Promise<void> => {
-        await api.patch(`/v1/reading-rooms/${roomId}/speed`, null, {
+    updatePlaySpeed: async (roomId: number, speed: number) => {
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/speed`, null, {
             params: { speed }
         });
+        return response.data;
     },
 
     // 독서 시작 (방장 전용)
-    startReading: async (roomId: number): Promise<void> => {
-        await api.patch(`/v1/reading-rooms/${roomId}/start`);
+    startReading: async (roomId: number) => {
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/start`);
+        return response.data;
     },
 
     // 독서 일시정지/재개 (방장 전용)
-    pauseReading: async (roomId: number): Promise<void> => {
-        await api.patch(`/v1/reading-rooms/${roomId}/pause`);
+    pauseReading: async (roomId: number) => {
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/pause`);
+        return response.data;
     },
 
     // 독서 종료 (방장 전용)
@@ -94,17 +97,10 @@ export const readingRoomService = {
         await api.patch(`/v1/reading-rooms/${roomId}/finish`);
     },
 
-    // TODO: 방 목록 조회 API가 백엔드에 없으면 추가 필요
-    // 임시로 mock 데이터 반환
+    // 방 목록 조회
     getRooms: async (): Promise<ReadingRoom[]> => {
-        try {
-            const response = await api.get<ReadingRoom[]>('/v1/reading-rooms');
-            return response.data;
-        } catch {
-            // 백엔드에 API가 없으면 빈 배열 반환
-            console.log('Reading rooms list API not available, returning empty array');
-            return [];
-        }
+        const response = await api.get<ReadingRoom[]>('/v1/reading-rooms');
+        return response.data;
     },
 
     // 독서룸 상세 조회
@@ -115,12 +111,8 @@ export const readingRoomService = {
 
     // 참여자 목록 조회
     getParticipants: async (roomId: number): Promise<RoomParticipant[]> => {
-        try {
-            const response = await api.get<RoomParticipant[]>(`/v1/reading-rooms/${roomId}/participants`);
-            return response.data;
-        } catch {
-            return [];
-        }
+        const response = await api.get<RoomParticipant[]>(`/v1/reading-rooms/${roomId}/participants`);
+        return response.data;
     },
 };
 
