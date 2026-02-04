@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle, Bell,
+    LayoutDashboard, Users, BookOpen, AlertTriangle,
     Search, Shield, ChevronLeft, ChevronRight, Loader2,
 
 } from 'lucide-react';

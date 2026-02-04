@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, BookOpen, Star, Coins, LogOut,
-    Edit2, Loader2, MessageSquare, Heart, Zap,
+    Edit2, Loader2, MessageSquare, Zap,
     X, Camera, Check, CreditCard, Crown, BarChart3, Clock
 } from 'lucide-react';
 import Header from '../components/layout/Header';

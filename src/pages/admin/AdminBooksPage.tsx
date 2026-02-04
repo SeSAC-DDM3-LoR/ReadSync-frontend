@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
-    LayoutDashboard, Users, AlertTriangle, Bell, Shield, X, Loader2,
+    LayoutDashboard, Users, AlertTriangle, Shield, X, Loader2,
     Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
     Zap, CheckCircle, Brain
 } from 'lucide-react';
