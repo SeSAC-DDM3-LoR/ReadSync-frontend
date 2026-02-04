@@ -18,7 +18,7 @@ const LibraryPage: React.FC = () => {
 
     const [books, setBooks] = useState<LibraryType[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [filter, setFilter] = useState<'all' | 'reading' | 'completed'>('all');
+    const [filter, setFilter] = useState<'all' | 'before_reading' | 'reading' | 'completed'>('all');
 
     const location = useLocation();
 
@@ -58,7 +58,7 @@ const LibraryPage: React.FC = () => {
     const loadLibrary = async () => {
         setIsLoading(true);
         try {
-            const response = await libraryService.getMyLibrary(0, 50);
+            const response = await libraryService.getMyLibrary(0, 50, 'libraryId,desc');
             setBooks(response.content);
         } catch (error) {
             console.error('Failed to load library:', error);
@@ -68,6 +68,7 @@ const LibraryPage: React.FC = () => {
     };
 
     const filteredBooks = books.filter((book) => {
+        if (filter === 'before_reading') return book.readingStatus === 'BEFORE_READING';
         if (filter === 'reading') return book.readingStatus === 'READING';
         if (filter === 'completed') return book.readingStatus === 'COMPLETED';
         return true;
@@ -101,18 +102,18 @@ const LibraryPage: React.FC = () => {
                         </Link>
                     </div>
 
-                    {/* 필터 탭 */}
-                    <div className="flex gap-2 mb-8">
-                        {(['all', 'reading', 'completed'] as const).map((f) => (
+                    <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-hide">
+                        {(['all', 'before_reading', 'reading', 'completed'] as const).map((f) => (
                             <button
                                 key={f}
                                 onClick={() => setFilter(f)}
-                                className={`px-4 py-2 rounded-xl font-medium transition-colors ${filter === f
+                                className={`px-4 py-2 rounded-xl font-medium transition-colors whitespace-nowrap ${filter === f
                                     ? 'bg-emerald-500 text-white'
                                     : 'bg-white text-gray-600 hover:bg-emerald-50'
                                     }`}
                             >
                                 {f === 'all' && '전체'}
+                                {f === 'before_reading' && '읽기 전'}
                                 {f === 'reading' && '읽는 중'}
                                 {f === 'completed' && '완독'}
                             </button>

@@ -44,9 +44,9 @@ export interface BookmarkRequest {
 
 export const libraryService = {
     // 내 서재 조회
-    getMyLibrary: async (page = 0, size = 12): Promise<PageResponse<Library>> => {
+    getMyLibrary: async (page = 0, size = 12, sort = 'libraryId,desc'): Promise<PageResponse<Library>> => {
         const response = await api.get<PageResponse<Library>>('/v1/my-library/me', {
-            params: { page, size, _t: Date.now() }, // 캐시 방지용 타임스탬프
+            params: { page, size, sort, _t: Date.now() }, // 캐시 방지용 타임스탬프
         });
         return response.data;
     },

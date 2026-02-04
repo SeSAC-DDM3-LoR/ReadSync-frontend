@@ -223,6 +223,7 @@ const PersonalReaderPage: React.FC = () => {
     const currentPageRef = useRef<number>(0);  // 현재 페이지를 ref로 추적하여 의존성 문제 해결
     const pagesRef = useRef<PageContent[]>([]);  // pages를 ref로 추적하여 callback 의존성 안정화
     const lastLeftPageFirstParagraphRef = useRef<number>(0);  // 왼쪽 페이지 첫 문단 추적 (fallback용)
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // [New] 디바운스 타이머 Refs
 
     // 마지막 읽은 위치 복원
     const [initialPosition, setInitialPosition] = useState<number | null>(null);
@@ -469,6 +470,12 @@ const PersonalReaderPage: React.FC = () => {
     const sendReadingPulse = useCallback(async (isForce: boolean = false) => {
         if (!libraryId || !chapterId) return;
 
+        // [New] 강제 전송 시 예비된 디바운스 타이머 취소 (중복 전송 방지)
+        if (isForce && debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
+
         const now = Date.now();
         const readTimeSeconds = Math.floor((now - readStartTimeRef.current) / 1000);
         const allParagraphs = Array.from(readParagraphsRef.current);
@@ -538,6 +545,17 @@ const PersonalReaderPage: React.FC = () => {
     useEffect(() => {
         sendReadingPulseRef.current = sendReadingPulse;
     }, [sendReadingPulse]);
+
+    // [New] 디바운스 펄스 전송 (빠른 페이지 넘김 시 API 과부하 방지)
+    const debouncedSendPulse = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+            sendReadingPulseRef.current();
+            debounceTimerRef.current = null;
+        }, 2000); // 2초 대기
+    }, []);
 
     // 5분 간격 자동 펄스 전송 (챕터가 바뀔 때만 interval 재생성)
     useEffect(() => {
@@ -1311,8 +1329,8 @@ const PersonalReaderPage: React.FC = () => {
                 }
             });
             // [Fix] 페이지 넘길 때마다 진행률 저장 시도 (사용자 요청: "Apply progress")
-            // force=false이므로 너무 잦은 요청은 내부적으로 조절됨
-            sendReadingPulse();
+            // [Debounce] 빠른 페이지 넘김 시 API 스팸 방지를 위해 디바운스 적용
+            debouncedSendPulse();
         }
 
         if (currentPage + 2 < totalPages) {
@@ -1331,7 +1349,7 @@ const PersonalReaderPage: React.FC = () => {
                     readParagraphsRef.current.add(parseInt(match[1]));
                 }
             });
-            sendReadingPulse();
+            debouncedSendPulse();
         }
 
         if (currentPage >= 2) {
