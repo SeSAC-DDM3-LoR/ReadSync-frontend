@@ -62,6 +62,11 @@ const BookDetailPage: React.FC = () => {
             loadPurchasedBooks();
             loadCartItems();
             loadLibraryBooks();
+        } else {
+            // [Fix] 비회원이면 확인 로직 없이 로딩 상태 해제 (버튼 즉시 노출)
+            setIsLoadingPurchased(false);
+            setIsLoadingCart(false);
+            setIsLoadingLibrary(false);
         }
     }, [id, isAuthenticated]);
 

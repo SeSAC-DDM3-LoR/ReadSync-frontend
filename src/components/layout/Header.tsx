@@ -122,7 +122,7 @@ const Header: React.FC = () => {
             <Link to="/library" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
               내 서재
             </Link>
-            <Link to="/ai-chat" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
+            {/* <Link to="/ai-chat" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
               AI 채팅
             </Link>
             {/* <Link to="/community" className="text-gray-600 hover:text-emerald-600 font-medium transition-colors">
@@ -285,7 +285,7 @@ const Header: React.FC = () => {
               <Link to="/library" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
                 내 서재
               </Link>
-              <Link to="/ai-chat" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
+              {/* <Link to="/ai-chat" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
                 AI 채팅
               </Link>
               {/* <Link to="/community" className="px-4 py-3 text-gray-700 hover:bg-emerald-50 rounded-xl font-medium transition-colors">
