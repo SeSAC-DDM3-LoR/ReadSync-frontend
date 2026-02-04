@@ -175,7 +175,6 @@ const EditProfileModal: React.FC<{
     const initialGenres = user.preferredGenre ? user.preferredGenre.split(',').map((g: string) => g.trim()) : [];
     const [selectedGenres, setSelectedGenres] = useState<string[]>(initialGenres);
 
-    const [profileImage, setProfileImage] = useState<string | null>(user.profileImage);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -221,7 +220,7 @@ const EditProfileModal: React.FC<{
         setError(null);
 
         try {
-            let finalImageUrl = profileImage;
+            let finalImageUrl = user.profileImage;
 
             // 1. Upload Image if changed
             if (imageFile) {
@@ -281,7 +280,7 @@ const EditProfileModal: React.FC<{
                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-4 border-emerald-50">
                                 <img
-                                    src={previewImage || profileImage || "https://via.placeholder.com/150"}
+                                    src={previewImage || user.profileImage || "https://via.placeholder.com/150"}
                                     alt="Profile"
                                     className="w-full h-full object-cover"
                                 />
