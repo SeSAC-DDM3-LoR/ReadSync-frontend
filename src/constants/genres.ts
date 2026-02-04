@@ -1,6 +1,5 @@
 import {
-    BookOpen, Sparkles, ArrowRight, Check,
-    BookHeart, Wand2, Skull, Heart, Rocket,
+    Wand2, Skull, Heart, Rocket,
     Briefcase, Leaf, History, Music
 } from 'lucide-react';
 

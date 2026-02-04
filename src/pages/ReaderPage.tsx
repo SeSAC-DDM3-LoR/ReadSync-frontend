@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, ChevronLeft, Bookmark, Volume2, Settings, ArrowLeft, ArrowRight } from 'lucide-react';
+import { ChevronLeft, Bookmark, Volume2, Settings, ArrowLeft, ArrowRight } from 'lucide-react';
 
 const ReaderPage: React.FC = () => {
     const { libraryId, chapterId } = useParams<{ libraryId: string; chapterId: string }>();

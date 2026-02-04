@@ -1892,7 +1892,6 @@ const PersonalReaderPage: React.FC = () => {
                                         const isCurrent = ch.chapterId === chapter?.chapterId;
                                         // 2. 저장된 북마크 정보
                                         const bookmark = chapterBookmarkMap.get(ch.chapterId);
-                                        const progress = bookmark?.progress || 0;
                                         const readMaskBase64 = bookmark?.readMask || "";
                                         let readMask = "";
 

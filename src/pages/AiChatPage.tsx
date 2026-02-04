@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { MessageSquare, Send, Bot, User, ArrowLeft, BookOpen, Sparkles } from 'lucide-react';
+import { Send, Bot, User, ArrowLeft, Sparkles } from 'lucide-react';
 import Header from '../components/layout/Header';
-import Footer from '../components/layout/Footer';
 
 interface Message {
     id: number;
@@ -80,14 +79,14 @@ const AiChatPage: React.FC = () => {
                                     className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}
                                 >
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${message.role === 'user'
-                                            ? 'bg-emerald-100 text-emerald-600'
-                                            : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
+                                        ? 'bg-emerald-100 text-emerald-600'
+                                        : 'bg-gradient-to-br from-purple-500 to-pink-500 text-white'
                                         }`}>
                                         {message.role === 'user' ? <User size={20} /> : <Bot size={20} />}
                                     </div>
                                     <div className={`max-w-[70%] p-4 rounded-2xl ${message.role === 'user'
-                                            ? 'bg-emerald-500 text-white rounded-tr-none'
-                                            : 'bg-gray-100 text-gray-800 rounded-tl-none'
+                                        ? 'bg-emerald-500 text-white rounded-tr-none'
+                                        : 'bg-gray-100 text-gray-800 rounded-tl-none'
                                         }`}>
                                         <p className="whitespace-pre-wrap">{message.content}</p>
                                     </div>

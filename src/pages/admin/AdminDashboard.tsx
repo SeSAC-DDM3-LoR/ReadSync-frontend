@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle, Bell,
-    TrendingUp, Eye, ArrowUpRight, Loader2, Shield
+    LayoutDashboard, Users, BookOpen, AlertTriangle,
+    TrendingUp, ArrowUpRight, Loader2, Shield
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
-import { adminUserService, adminReportService } from '../../services/adminService';
+import { adminUserService, adminReportService, adminBookService } from '../../services/adminService';
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -15,6 +15,8 @@ const AdminDashboard: React.FC = () => {
     const [stats, setStats] = useState({
         totalUsers: 0,
         pendingReports: 0,
+        todaySignups: 0,
+        totalBooks: 0,
     });
 
     useEffect(() => {
@@ -27,15 +29,33 @@ const AdminDashboard: React.FC = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, user?.role]);
 
+    // 오늘 날짜인지 확인하는 헬퍼 함수
+    const isToday = (dateString: string): boolean => {
+        const date = new Date(dateString);
+        const today = new Date();
+        return date.getFullYear() === today.getFullYear() &&
+            date.getMonth() === today.getMonth() &&
+            date.getDate() === today.getDate();
+    };
+
     const loadStats = async () => {
         try {
-            const [usersRes, reportsRes] = await Promise.all([
-                adminUserService.getAllUsers(0, 1).catch(() => ({ totalElements: 0 })),
+            const [usersRes, reportsRes, booksRes] = await Promise.all([
+                adminUserService.getAllUsers(0, 1000).catch(() => ({ content: [], totalElements: 0 })),
                 adminReportService.getReports('PENDING', 0, 1).catch(() => ({ totalElements: 0 })),
+                adminBookService.getAllBooks(0, 1).catch(() => ({ totalElements: 0 })),
             ]);
+
+            // 오늘 가입한 유저 수 계산
+            const todaySignups = usersRes.content
+                ? usersRes.content.filter((user: { createdAt: string }) => isToday(user.createdAt)).length
+                : 0;
+
             setStats({
                 totalUsers: usersRes.totalElements || 0,
                 pendingReports: reportsRes.totalElements || 0,
+                todaySignups,
+                totalBooks: booksRes.totalElements || 0,
             });
         } catch (error) {
             console.error('Failed to load stats:', error);
@@ -45,10 +65,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const menuItems = [
-        { path: '/admin/users', label: '회원 관리', icon: Users, count: stats.totalUsers },
+        { path: '/admin/users', label: '회원 관리', icon: Users },
         { path: '/admin/books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle, count: stats.pendingReports, highlight: stats.pendingReports > 0 },
-        { path: '/admin/notices', label: '공지 관리', icon: Bell },
+        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle },
+        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
     ];
 
     return (
@@ -86,12 +106,12 @@ const AdminDashboard: React.FC = () => {
                                     <Icon size={20} />
                                     <span className="font-medium">{item.label}</span>
                                 </div>
-                                {item.count !== undefined && (
+                                {/* {item.count !== undefined && (
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${item.highlight ? 'bg-red-500 text-white' : 'bg-gray-600 text-gray-300'
                                         }`}>
                                         {item.count}
                                     </span>
-                                )}
+                                )} */}
                             </Link>
                         );
                     })}
@@ -136,14 +156,14 @@ const AdminDashboard: React.FC = () => {
                                 highlight={stats.pendingReports > 0}
                             />
                             <StatCard
-                                label="오늘 방문자"
-                                value={0}
-                                icon={<Eye className="text-purple-400" />}
+                                label="전체 도서"
+                                value={stats.totalBooks}
+                                icon={<BookOpen className="text-purple-400" />}
                                 color="purple"
                             />
                             <StatCard
                                 label="신규 가입"
-                                value={0}
+                                value={stats.todaySignups}
                                 icon={<TrendingUp className="text-green-400" />}
                                 color="green"
                             />

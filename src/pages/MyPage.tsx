@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     User, BookOpen, Star, Coins, LogOut,
-    Edit2, Loader2, MessageSquare, Heart, Zap,
+    Edit2, Loader2, MessageSquare, Zap,
     X, Camera, Check, CreditCard, Crown, BarChart3, Clock
 } from 'lucide-react';
 import Header from '../components/layout/Header';
@@ -48,8 +48,8 @@ const MyPage: React.FC = () => {
         { path: '/mypage/comments', label: '내 댓글', icon: MessageSquare },
         { path: '/mypage/exp', label: '경험치 내역', icon: Zap },
         { path: '/mypage/credits', label: '씨앗 포인트 내역', icon: Coins }, // Renamed from Credit
-        { path: '/inquiry', label: '1:1 문의', icon: Edit2 },
-        { path: '/notices', label: '공지사항', icon: Heart },
+        // { path: '/inquiry', label: '1:1 문의', icon: Edit2 },
+        // { path: '/notices', label: '공지사항', icon: Heart },
     ];
 
     const currentPath = location.pathname;
@@ -175,7 +175,6 @@ const EditProfileModal: React.FC<{
     const initialGenres = user.preferredGenre ? user.preferredGenre.split(',').map((g: string) => g.trim()) : [];
     const [selectedGenres, setSelectedGenres] = useState<string[]>(initialGenres);
 
-    const [profileImage, setProfileImage] = useState<string | null>(user.profileImage);
     const [previewImage, setPreviewImage] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
 
@@ -221,7 +220,7 @@ const EditProfileModal: React.FC<{
         setError(null);
 
         try {
-            let finalImageUrl = profileImage;
+            let finalImageUrl = user.profileImage;
 
             // 1. Upload Image if changed
             if (imageFile) {
@@ -281,7 +280,7 @@ const EditProfileModal: React.FC<{
                         <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                             <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-100 border-4 border-emerald-50">
                                 <img
-                                    src={previewImage || profileImage || "https://via.placeholder.com/150"}
+                                    src={previewImage || user.profileImage || "https://via.placeholder.com/150"}
                                     alt="Profile"
                                     className="w-full h-full object-cover"
                                 />
