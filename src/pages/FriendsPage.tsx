@@ -3,23 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     Users, UserPlus, UserMinus, Clock, Check, X,
-    Loader2, Search, Circle
+    Loader2, BookOpen
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { friendshipService } from '../services/communityService';
+import { roomInvitationService, type RoomInvitation } from '../services/readingRoomService';
 import useAuthStore from '../stores/authStore';
 import type { Friend, FriendRequest } from '../services/communityService';
+import websocketClient from '../services/websocketClient';
 
 const FriendsPage: React.FC = () => {
     const navigate = useNavigate();
-    const { isAuthenticated } = useAuthStore();
+    const { isAuthenticated, user } = useAuthStore();
 
     const [friends, setFriends] = useState<Friend[]>([]);
     const [receivedRequests, setReceivedRequests] = useState<FriendRequest[]>([]);
     const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
+    const [roomInvitations, setRoomInvitations] = useState<RoomInvitation[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'friends' | 'received' | 'sent'>('friends');
+    const [activeTab, setActiveTab] = useState<'friends' | 'received' | 'sent' | 'invitations'>('friends');
+    const [processingId, setProcessingId] = useState<number | null>(null);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -27,19 +31,45 @@ const FriendsPage: React.FC = () => {
             return;
         }
         loadData();
-    }, [isAuthenticated]);
+
+        // WebSocket 실시간 알림 구독
+        if (user?.userId) {
+            const token = localStorage.getItem('accessToken');
+            if (token && !websocketClient.isConnected()) {
+                websocketClient.connect(token).then(() => {
+                    websocketClient.subscribeToInvitations(user.userId, () => {
+                        loadData();
+                    });
+                }).catch(err => {
+                    console.error('WebSocket connection failed:', err);
+                });
+            } else if (websocketClient.isConnected()) {
+                websocketClient.subscribeToInvitations(user.userId, () => {
+                    loadData();
+                });
+            }
+        }
+
+        return () => {
+            if (user?.userId) {
+                websocketClient.unsubscribeFromInvitations(user.userId);
+            }
+        };
+    }, [isAuthenticated, user?.userId]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [friendsData, receivedData, sentData] = await Promise.all([
+            const [friendsData, receivedData, sentData, invitationsData] = await Promise.all([
                 friendshipService.getMyFriends(),
                 friendshipService.getReceivedRequests(),
                 friendshipService.getSentRequests(),
+                roomInvitationService.getReceivedInvitations(),
             ]);
             setFriends(friendsData);
             setReceivedRequests(receivedData);
             setSentRequests(sentData);
+            setRoomInvitations(invitationsData.filter(inv => inv.status === 'PENDING'));
         } catch (error) {
             console.error('Failed to load friends data:', error);
         } finally {
@@ -67,11 +97,25 @@ const FriendsPage: React.FC = () => {
 
     const handleUnfriend = async (friendshipId: number) => {
         if (!confirm('친구를 삭제하시겠습니까?')) return;
+
+        // 이전 상태 저장
+        const previousFriends = [...friends];
+
         try {
+            // 즉시 UI에서 제거 (낙관적 업데이트)
+            setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
+
+            // API 호출
             await friendshipService.unfriend(friendshipId);
-            loadData();
+            console.log('✅ Friend deleted successfully');
+
+            // 서버 데이터와 동기화
+            await loadData();
         } catch (error) {
-            console.error('Failed to unfriend:', error);
+            console.error('❌ Failed to unfriend:', error);
+            // 에러 발생 시 이전 상태로 복구
+            setFriends(previousFriends);
+            alert('친구 삭제에 실패했습니다.');
         }
     };
 
@@ -80,6 +124,33 @@ const FriendsPage: React.FC = () => {
             case 'ONLINE': return 'bg-green-500';
             case 'READING': return 'bg-blue-500';
             default: return 'bg-gray-400';
+        }
+    };
+
+    // 방 초대 수락
+    const handleAcceptRoomInvitation = async (invitationId: number, roomId: number) => {
+        setProcessingId(invitationId);
+        try {
+            await roomInvitationService.acceptInvitation(invitationId);
+            navigate(`/tts-room/${roomId}`);
+        } catch (error) {
+            console.error('Failed to accept invitation:', error);
+            alert('초대 수락에 실패했습니다.');
+        } finally {
+            setProcessingId(null);
+        }
+    };
+
+    // 방 초대 거절
+    const handleRejectRoomInvitation = async (invitationId: number) => {
+        setProcessingId(invitationId);
+        try {
+            await roomInvitationService.rejectInvitation(invitationId);
+            await loadData();
+        } catch (error) {
+            console.error('Failed to reject invitation:', error);
+        } finally {
+            setProcessingId(null);
         }
     };
 
@@ -253,6 +324,64 @@ const FriendsPage: React.FC = () => {
                                                     <div>
                                                         <p className="font-bold text-gray-900">{request.addresseeName}</p>
                                                         <p className="text-sm text-amber-600">대기 중</p>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        ))
+                                    )}
+                                </div>
+                            )}
+
+                            {/* 독서룸 초대 */}
+                            {activeTab === 'invitations' && (
+                                <div className="space-y-3">
+                                    {roomInvitations.length === 0 ? (
+                                        <div className="text-center py-16">
+                                            <BookOpen size={64} className="text-gray-300 mx-auto mb-4" />
+                                            <p className="text-gray-500">받은 독서룸 초대가 없습니다</p>
+                                        </div>
+                                    ) : (
+                                        roomInvitations.map((invitation) => (
+                                            <motion.div
+                                                key={invitation.invitationId}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100"
+                                            >
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-400 to-pink-400 rounded-xl flex items-center justify-center flex-shrink-0">
+                                                        <BookOpen size={24} className="text-white" />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <h3 className="font-bold text-gray-900 mb-1">
+                                                            {invitation.roomName}
+                                                        </h3>
+                                                        <p className="text-sm text-gray-600 mb-1">
+                                                            <span className="font-semibold text-purple-600">{invitation.inviterName}</span>님이 초대했습니다
+                                                        </p>
+                                                        <p className="text-xs text-gray-500">
+                                                            {new Date(invitation.createdAt).toLocaleString()}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleAcceptRoomInvitation(invitation.invitationId, invitation.roomId)}
+                                                            disabled={processingId === invitation.invitationId}
+                                                            className="p-2 text-green-600 bg-green-50 hover:bg-green-100 rounded-lg disabled:opacity-50"
+                                                        >
+                                                            {processingId === invitation.invitationId ? (
+                                                                <Loader2 size={20} className="animate-spin" />
+                                                            ) : (
+                                                                <Check size={20} />
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleRejectRoomInvitation(invitation.invitationId)}
+                                                            disabled={processingId === invitation.invitationId}
+                                                            className="p-2 text-red-500 bg-red-50 hover:bg-red-100 rounded-lg disabled:opacity-50"
+                                                        >
+                                                            <X size={20} />
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </motion.div>
