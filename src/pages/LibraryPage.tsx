@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     BookOpen, Loader2, ChevronRight, Library, BookMarked,
@@ -20,13 +20,40 @@ const LibraryPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [filter, setFilter] = useState<'all' | 'reading' | 'completed'>('all');
 
+    const location = useLocation();
+
     useEffect(() => {
         if (!isAuthenticated) {
             navigate('/login');
             return;
         }
-        loadLibrary();
-    }, [isAuthenticated]);
+
+        // Optimistic UI: Reader에서 넘어온 최신 상태가 있으면 즉시 반영
+        if (location.state && location.state.updatedLibraryId) {
+            const { updatedLibraryId, updatedProgress, lastReadChapterId } = location.state;
+
+            // 기존 목록에서 해당 책만 업데이트 (UI 즉시 반영)
+            setBooks(prevBooks => prevBooks.map(book => {
+                if (book.libraryId === updatedLibraryId) {
+                    return {
+                        ...book,
+                        totalProgress: updatedProgress,
+                        lastReadChapterId: lastReadChapterId,
+                        readingStatus: updatedProgress >= 100 ? 'COMPLETED' : 'READING'
+                    };
+                }
+                return book;
+            }));
+
+            // 약간의 지연 후 실제 서버 데이터 동기화 (Pulse 처리 시간 고려)
+            setTimeout(() => {
+                loadLibrary();
+            }, 500);
+        } else {
+            loadLibrary();
+        }
+
+    }, [isAuthenticated, location.state]);
 
     const loadLibrary = async () => {
         setIsLoading(true);

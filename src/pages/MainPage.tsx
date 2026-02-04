@@ -7,6 +7,7 @@ import useAuthStore from '../stores/authStore';
 import { bookService } from '../services/bookService';
 import type { Book as BookType } from '../services/bookService';
 import { creditService } from '../services/userService';
+import { libraryService } from '../services/libraryService'; // [New] Import
 import { levelService, getExpProgress, getExpNeededForNextLevel } from '../services/levelService';
 import type { Level } from '../services/levelService';
 import {
@@ -50,25 +51,29 @@ const RecommendedBookSection: React.FC<{
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
-        // [변경] 진짜 추천 API 호출 (내가 보유한 책 제외됨)
-        const response = await bookService.getRecommendedBooks(0, 10);
+        // [변경] 진짜 추천 API 호출 (내가 보유한 책 제외됨) - 20권 조회 (넉넉하게)
+        // Score 순으로 정렬되어 넘어옵니다.
+        // [Update] 추천 도서와 내 서재 목록을 병렬로 조회하여, 이미 소유한 책은 추천에서 제외
+        const [recResponse, libResponse] = await Promise.all([
+          bookService.getRecommendedBooks(0, 30), // 필터링될 것을 고려해 넉넉히 조회
+          libraryService.getMyLibrary(0, 100)     // 내 서재 책 ID 확인용
+        ]);
 
-        if (response.content.length > 0) {
-          setRecommendations(response.content);
+        const ownedBookIds = new Set(libResponse.content.map(lib => lib.bookId));
+        let candidateBooks = recResponse.content.filter(book => !ownedBookIds.has(book.bookId));
+
+        if (candidateBooks.length > 0) {
+          setRecommendations(candidateBooks.slice(0, 20));
         } else {
-          // 추천 결과가 없으면 (Cold Start) 기존처럼 랜덤 노출
-          throw new Error("No recommendations found");
+          // Fallback: 전체 도서 랜덤 (여기서도 소유한 책 제외)
+          const allBooksResponse = await bookService.getBooks(0, 50);
+          const shuffled = [...allBooksResponse.content]
+            .filter(book => !ownedBookIds.has(book.bookId))
+            .sort(() => 0.5 - Math.random());
+          setRecommendations(shuffled.slice(0, 20));
         }
       } catch (err) {
-        console.warn("Failed to load personal recommendations, falling back to random.", err);
-        try {
-          // Fallback: 전체 도서 랜덤
-          const response = await bookService.getBooks(0, 30);
-          const shuffled = [...response.content].sort(() => 0.5 - Math.random());
-          setRecommendations(shuffled);
-        } catch (fallbackErr) {
-          console.error("Failed to load fallback books", fallbackErr);
-        }
+        console.warn("Failed to load recommendations.", err);
       } finally {
         setLoading(false);
       }
@@ -77,17 +82,20 @@ const RecommendedBookSection: React.FC<{
   }, []);
 
   const handleNext = () => {
-    setCurrentIndex((prev) => (prev + ITEMS_PER_VIEW) % recommendations.length);
+    // [변경] 무한 루프 제거, 끝에 도달하면 멈춤
+    if (currentIndex + ITEMS_PER_VIEW < recommendations.length) {
+      setCurrentIndex((prev) => prev + ITEMS_PER_VIEW);
+    }
   };
 
   const handlePrev = () => {
-    setCurrentIndex((prev) => (prev - ITEMS_PER_VIEW + recommendations.length) % recommendations.length);
+    // [변경] 무한 루프 제거
+    if (currentIndex - ITEMS_PER_VIEW >= 0) {
+      setCurrentIndex((prev) => prev - ITEMS_PER_VIEW);
+    }
   };
 
   const visibleBooks = recommendations.slice(currentIndex, currentIndex + ITEMS_PER_VIEW);
-  if (visibleBooks.length < ITEMS_PER_VIEW && recommendations.length > 0) {
-    visibleBooks.push(...recommendations.slice(0, ITEMS_PER_VIEW - visibleBooks.length));
-  }
 
   if (loading || recommendations.length === 0) return null;
 
@@ -106,13 +114,23 @@ const RecommendedBookSection: React.FC<{
         <div className="flex gap-2">
           <button
             onClick={handlePrev}
-            className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+            disabled={currentIndex === 0}
+            className={`p-1.5 rounded-full border border-gray-200 transition-colors
+              ${currentIndex === 0
+                ? 'bg-gray-100 text-gray-300'
+                : 'bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600'
+              }`}
           >
             <ChevronLeft size={18} />
           </button>
           <button
             onClick={handleNext}
-            className="p-1.5 rounded-full bg-white border border-gray-200 text-gray-600 hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+            disabled={currentIndex + ITEMS_PER_VIEW >= recommendations.length}
+            className={`p-1.5 rounded-full border border-gray-200 transition-colors
+              ${currentIndex + ITEMS_PER_VIEW >= recommendations.length
+                ? 'bg-gray-100 text-gray-300'
+                : 'bg-white text-gray-600 hover:bg-emerald-50 hover:text-emerald-600'
+              }`}
           >
             <ChevronRight size={18} />
           </button>
@@ -279,14 +297,13 @@ const UserProfileSection: React.FC = () => {
   );
 };
 
-// 최근 책 카드
+// 최근 책 카드 (진행률 제거됨)
 const RecentBookCard: React.FC<{
   index: number;
   title: string;
   author: string;
-  progress: number;
   onClick: () => void;
-}> = ({ index, title, author, progress, onClick }) => (
+}> = ({ index, title, author, onClick }) => (
   <motion.div
     className="book-card cursor-pointer"
     initial={{ opacity: 0, y: 20 }}
@@ -300,33 +317,12 @@ const RecentBookCard: React.FC<{
       <div className="w-full h-full flex items-center justify-center">
         <Book size={40} className="text-emerald-300 drop-shadow" />
       </div>
-
-      {/* 진행률 표시 */}
-      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/20">
-        <div
-          className="h-full bg-gradient-to-r from-emerald-400 to-green-400"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
-
-      <div className="book-card-badge">
-        {progress > 0 ? '이어읽기' : '새로 시작'}
-      </div>
     </div>
     <div className="mt-3 px-1">
       <h4 className="font-bold text-gray-800 text-sm truncate group-hover:text-emerald-700 transition-colors">
         {title}
       </h4>
       <p className="text-xs text-gray-500 truncate">{author}</p>
-      <div className="flex items-center gap-1 mt-1">
-        <div className="flex-1 h-1 bg-gray-200 rounded-full">
-          <div
-            className="h-full bg-emerald-400 rounded-full"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-        <span className="text-[10px] text-gray-500 font-medium">{progress}%</span>
-      </div>
     </div>
   </motion.div>
 );
@@ -350,8 +346,13 @@ const MainPage: React.FC = () => {
   // 레벨 정보 상태
   const [levels, setLevels] = useState<Level[]>([]);
 
-  // 유저 정보 가져오기
-  const { user } = useAuthStore();
+  // 유저 정보 가져오기 (및 최신화)
+  const { user, fetchCurrentUser } = useAuthStore();
+
+  // [New] 페이지 진입 시 유저 경험치/레벨 최신화 (리더 등에서 돌아왔을 때 반영)
+  useEffect(() => {
+    fetchCurrentUser();
+  }, [fetchCurrentUser]);
 
   // 경험치 진행률 계산 (레벨 데이터 기반)
   const expProgress = user && levels.length > 0
@@ -767,7 +768,6 @@ const MainPage: React.FC = () => {
                   index={idx}
                   title={book.title}
                   author={book.author}
-                  progress={0}
                   onClick={() => navigate(`/books/${book.bookId}`)}
                 />
               ))
