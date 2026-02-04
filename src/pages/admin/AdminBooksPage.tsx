@@ -414,7 +414,7 @@ const AdminBooksPage: React.FC = () => {
         { path: '/admin/users', label: '회원 관리', icon: Users },
         { path: '/admin/books', label: '도서 관리', icon: BookOpen, active: true },
         { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle },
-        { path: '/admin/notices', label: '공지 관리', icon: Bell },
+        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
     ];
 
     return (

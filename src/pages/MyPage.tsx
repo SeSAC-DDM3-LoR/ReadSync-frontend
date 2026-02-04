@@ -48,8 +48,8 @@ const MyPage: React.FC = () => {
         { path: '/mypage/comments', label: '내 댓글', icon: MessageSquare },
         { path: '/mypage/exp', label: '경험치 내역', icon: Zap },
         { path: '/mypage/credits', label: '씨앗 포인트 내역', icon: Coins }, // Renamed from Credit
-        { path: '/inquiry', label: '1:1 문의', icon: Edit2 },
-        { path: '/notices', label: '공지사항', icon: Heart },
+        // { path: '/inquiry', label: '1:1 문의', icon: Edit2 },
+        // { path: '/notices', label: '공지사항', icon: Heart },
     ];
 
     const currentPath = location.pathname;
