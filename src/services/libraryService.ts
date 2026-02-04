@@ -30,6 +30,7 @@ export interface Bookmark {
     chapterId: number;
     lastReadPos: number;
     progress: number;
+    readMask: string; // '0' and '1' string
 }
 
 export interface BookmarkRequest {
@@ -45,7 +46,7 @@ export const libraryService = {
     // 내 서재 조회
     getMyLibrary: async (page = 0, size = 12): Promise<PageResponse<Library>> => {
         const response = await api.get<PageResponse<Library>>('/v1/my-library/me', {
-            params: { page, size },
+            params: { page, size, _t: Date.now() }, // 캐시 방지용 타임스탬프
         });
         return response.data;
     },
@@ -173,16 +174,28 @@ export const readingPulseService = {
 // ==================== Enhanced Bookmark Functions ====================
 
 // bookmarkService에 특정 라이브러리+챕터의 북마크 조회 함수 추가
+// bookmarkService에 특정 라이브러리+챕터의 북마크 조회 함수 추가
+export const getBookmarksByLibrary = async (
+    libraryId: number
+): Promise<Bookmark[]> => {
+    try {
+        const response = await api.get<PageResponse<Bookmark>>(`/v1/bookmarks/library/${libraryId}`, {
+            params: { page: 0, size: 100, _t: Date.now() }
+        });
+        return response.data.content;
+    } catch {
+        return [];
+    }
+};
+
 export const getBookmarkByLibraryAndChapter = async (
     libraryId: number,
     chapterId: number
 ): Promise<Bookmark | null> => {
     try {
-        const response = await api.get<PageResponse<Bookmark>>(`/v1/bookmarks/library/${libraryId}`, {
-            params: { page: 0, size: 100 }
-        });
+        const bookmarks = await getBookmarksByLibrary(libraryId);
         // chapterId와 일치하는 북마크 찾기
-        return response.data.content.find(b => b.chapterId === chapterId) || null;
+        return bookmarks.find(b => b.chapterId === chapterId) || null;
     } catch {
         return null;
     }
