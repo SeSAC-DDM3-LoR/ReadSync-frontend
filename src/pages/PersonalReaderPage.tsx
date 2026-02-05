@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Settings, Search, List,
     Sparkles, X, Send, Highlighter, StickyNote,
-    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle
+    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle, Trash2, Flag
 } from 'lucide-react';
 // 리더 관련 서비스 (책 콘텐츠, 챕터)
 import {
@@ -21,6 +21,8 @@ import {
     type CommentResponse,
     type LikeType
 } from '../services/commentService';
+// 신고 서비스
+import reportService from '../services/reportService';
 // AI 채팅 서비스
 import {
     aiChatService,
@@ -133,6 +135,14 @@ const PersonalReaderPage: React.FC = () => {
     const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
     const [aiInput, setAiInput] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // AI 메시지 변경 시 자동 스크롤
+    useEffect(() => {
+        if (rightSidebarTab === 'ai' && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [aiMessages, isAiLoading, rightSidebarTab]);
 
     // 검색
     const [searchQuery, setSearchQuery] = useState('');
@@ -210,11 +220,19 @@ const PersonalReaderPage: React.FC = () => {
     };
 
     // 댓글
-    // 댓글
     const [comments, setComments] = useState<CommentResponse[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSpoiler, setIsSpoiler] = useState(false);
     const [isCommentLoading, setIsCommentLoading] = useState(false);
+    // 스포일러 댓글 공개 상태 관리 (Map<commentId, isRevealed>)
+    const [spoilerRevealedMap, setSpoilerRevealedMap] = useState<Map<number, boolean>>(new Map());
+    // 댓글 신고 관련 상태
+    const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
+    const [reportReasonType, setReportReasonType] = useState<'SPOILER' | 'ABUSE' | 'ADVERTISEMENT'>('ABUSE');
+    const [reportReason, setReportReason] = useState('');
+    const [showReportModal, setShowReportModal] = useState(false);
+    // 현재 로그인한 사용자
+    const currentUser = useAuthStore(state => state.user);
 
     // 독서 이벤트 추적 (Reading Pulse)
     const readStartTimeRef = useRef<number>(Date.now());
@@ -1554,27 +1572,75 @@ const PersonalReaderPage: React.FC = () => {
         if (!newComment.trim() || !chapterId) return;
 
         try {
-            await commentService.createComment(parseInt(chapterId), {
+            const createdComment = await commentService.createComment(parseInt(chapterId), {
                 content: newComment,
                 isSpoiler,
             });
+            // Optimistic UI: 댓글을 즉시 목록에 추가
+            setComments(prev => [...prev, createdComment]);
             setNewComment('');
             setIsSpoiler(false);
-            // 댓글 목록 새로고침
-            loadComments(parseInt(chapterId));
         } catch (error) {
             console.error('댓글 작성 실패:', error);
             alert('댓글 작성에 실패했습니다.');
+            // 에러 발생 시 목록 새로고침으로 동기화
+            if (chapterId) {
+                loadComments(parseInt(chapterId));
+            }
+        }
+    };
+
+    const handleDeleteComment = async (commentId: number) => {
+        if (!confirm('댓글을 삭제하시겠습니까?')) return;
+
+        try {
+            await commentService.deleteComment(commentId);
+            // 댓글 목록에서 제거
+            setComments(prev => prev.filter(c => c.commentId !== commentId));
+        } catch (error) {
+            console.error('댓글 삭제 실패:', error);
+            alert('댓글 삭제에 실패했습니다.');
+        }
+    };
+
+    const toggleSpoilerReveal = (commentId: number) => {
+        setSpoilerRevealedMap(prev => {
+            const newMap = new Map(prev);
+            newMap.set(commentId, !newMap.get(commentId));
+            return newMap;
+        });
+    };
+
+    const handleReportComment = async () => {
+        if (!reportReason.trim() || !reportingCommentId) return;
+
+        try {
+            await reportService.reportContent(
+                reportingCommentId,
+                'CHAPTERS_COMMENT',
+                reportReasonType,
+                reportReason
+            );
+            alert('신고가 접수되었습니다.');
+            setShowReportModal(false);
+            setReportingCommentId(null);
+            setReportReasonType('ABUSE');
+            setReportReason('');
+        } catch (error) {
+            console.error('댓글 신고 실패:', error);
+            alert('댓글 신고에 실패했습니다.');
         }
     };
 
     const handleToggleLike = async (commentId: number, likeType: LikeType) => {
         try {
-            await likeService.toggleCommentLike(commentId, likeType);
-            // 댓글 목록 새로고침
-            if (chapterId) {
-                loadComments(parseInt(chapterId));
-            }
+            const response = await likeService.toggleCommentLike(commentId, likeType);
+            // 댓글 목록에서 해당 댓글의 카운트만 업데이트
+            setComments(prev => prev.map(comment =>
+                comment.commentId === commentId
+                    ? { ...comment, likeCount: response.likeCount, dislikeCount: response.dislikeCount }
+                    : comment
+            ));
         } catch (error) {
             console.error('좋아요 토글 실패:', error);
         }
@@ -1830,7 +1896,7 @@ const PersonalReaderPage: React.FC = () => {
                                                     className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                                                 >
                                                     <div
-                                                        className={`p-3 rounded-lg text-sm max-w-[90%] ${msg.role === 'user'
+                                                        className={`p-3 rounded-lg text-sm max-w-[90%] whitespace-pre-wrap ${msg.role === 'user'
                                                             ? 'bg-emerald-500 text-white rounded-br-none'
                                                             : (theme.name === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800') + ' rounded-bl-none'
                                                             }`}
@@ -1856,6 +1922,7 @@ const PersonalReaderPage: React.FC = () => {
                                                 응답 생성 중...
                                             </div>
                                         )}
+                                        <div ref={messagesEndRef} />
                                     </div>
                                     <div className="flex gap-2">
                                         <input
@@ -2102,44 +2169,101 @@ const PersonalReaderPage: React.FC = () => {
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {comments.map(comment => (
-                                                <div
-                                                    key={comment.commentId}
-                                                    className="p-3 rounded-lg"
-                                                    style={{
-                                                        backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#F5F5F5'
-                                                    }}
-                                                >
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-sm font-medium">{comment.nickname}</span>
-                                                        <span className="text-xs opacity-50">
-                                                            {new Date(comment.createdAt).toLocaleDateString()}
-                                                        </span>
+                                            {comments.map(comment => {
+                                                const isRevealed = spoilerRevealedMap.get(comment.commentId) || false;
+                                                const isMyComment = currentUser && comment.userId === currentUser.userId;
+
+                                                return (
+                                                    <div
+                                                        key={comment.commentId}
+                                                        className="p-3 rounded-lg"
+                                                        style={{
+                                                            backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#F5F5F5'
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-sm font-medium">{comment.nickname}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs opacity-50">
+                                                                    {new Date(comment.createdAt).toLocaleDateString()}
+                                                                </span>
+                                                                {isMyComment ? (
+                                                                    <button
+                                                                        onClick={() => handleDeleteComment(comment.commentId)}
+                                                                        className="p-1.5 hover:bg-red-500/10 rounded transition-colors text-red-500"
+                                                                        title="댓글 삭제"
+                                                                    >
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setReportingCommentId(comment.commentId);
+                                                                            setShowReportModal(true);
+                                                                        }}
+                                                                        className="p-1.5 hover:bg-gray-500/10 rounded transition-colors opacity-60 hover:opacity-100"
+                                                                        title="댓글 신고"
+                                                                    >
+                                                                        <Flag size={16} />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {comment.isSpoiler && !isRevealed ? (
+                                                            <button
+                                                                onClick={() => toggleSpoilerReveal(comment.commentId)}
+                                                                className="text-sm text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                                            >
+                                                                ⚠️ 해당 댓글은 스포일러성 내용이 포함되어 있습니다. 보시려면 클릭해 주세요.
+                                                            </button>
+                                                        ) : (
+                                                            <div>
+                                                                {comment.isSpoiler && (
+                                                                    <button
+                                                                        onClick={() => toggleSpoilerReveal(comment.commentId)}
+                                                                        className="text-xs text-red-500 mb-1 hover:underline cursor-pointer"
+                                                                    >
+                                                                        [스포일러] 숨기기
+                                                                    </button>
+                                                                )}
+                                                                <p className="text-sm">{comment.content}</p>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center gap-3 mt-2">
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={() => handleToggleLike(comment.commentId, 'LIKE')}
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <ThumbsUp size={14} />
+                                                                <motion.span
+                                                                    key={`like-${comment.commentId}-${comment.likeCount}`}
+                                                                    initial={{ scale: 1.5, opacity: 0 }}
+                                                                    animate={{ scale: 1, opacity: 1 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                >
+                                                                    {comment.likeCount || 0}
+                                                                </motion.span>
+                                                            </motion.button>
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.9 }}
+                                                                onClick={() => handleToggleLike(comment.commentId, 'DISLIKE')}
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <ThumbsDown size={14} />
+                                                                <motion.span
+                                                                    key={`dislike-${comment.commentId}-${comment.dislikeCount}`}
+                                                                    initial={{ scale: 1.5, opacity: 0 }}
+                                                                    animate={{ scale: 1, opacity: 1 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                >
+                                                                    {comment.dislikeCount || 0}
+                                                                </motion.span>
+                                                            </motion.button>
+                                                        </div>
                                                     </div>
-                                                    <p className="text-sm">
-                                                        {comment.isSpoiler ? (
-                                                            <span className="text-red-500">[스포일러] </span>
-                                                        ) : null}
-                                                        {comment.content}
-                                                    </p>
-                                                    <div className="flex items-center gap-3 mt-2">
-                                                        <button
-                                                            onClick={() => handleToggleLike(comment.commentId, 'LIKE')}
-                                                            className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
-                                                        >
-                                                            <ThumbsUp size={14} />
-                                                            {comment.likeCount || 0}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleToggleLike(comment.commentId, 'DISLIKE')}
-                                                            className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
-                                                        >
-                                                            <ThumbsDown size={14} />
-                                                            {comment.dislikeCount || 0}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
@@ -2242,6 +2366,116 @@ const PersonalReaderPage: React.FC = () => {
                 )}
             </AnimatePresence>
 
+            {/* 신고 모달 */}
+            <AnimatePresence>
+                {showReportModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => setShowReportModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="rounded-2xl p-6 max-w-md w-full shadow-2xl"
+                            style={{
+                                backgroundColor: theme.bg,
+                                color: theme.text
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold">댓글 신고</h3>
+                                <button
+                                    onClick={() => setShowReportModal(false)}
+                                    className="p-2 hover:bg-black/10 rounded-lg"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2">
+                                    신고 유형
+                                </label>
+                                <div className="space-y-2 mb-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="ABUSE"
+                                            checked={reportReasonType === 'ABUSE'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'ABUSE')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">욕설/비방</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="SPOILER"
+                                            checked={reportReasonType === 'SPOILER'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'SPOILER')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">스포일러</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="ADVERTISEMENT"
+                                            checked={reportReasonType === 'ADVERTISEMENT'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'ADVERTISEMENT')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">광고</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2">
+                                    상세 사유
+                                </label>
+                                <textarea
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value)}
+                                    placeholder="상세 사유를 입력해 주세요"
+                                    className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
+                                    style={{
+                                        backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#FFF',
+                                        borderColor: theme.name === 'dark' ? '#444' : '#DDD',
+                                        color: theme.text
+                                    }}
+                                    rows={4}
+                                />
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowReportModal(false)}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleReportComment}
+                                    disabled={!reportReason.trim()}
+                                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    신고
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* 설정 모달 */}
             <AnimatePresence>
                 {showSettings && (
@@ -2327,7 +2561,7 @@ const PersonalReaderPage: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 

@@ -12,6 +12,7 @@ export type VisibilityStatus = 'VISIBLE' | 'BLINDED' | 'SUSPENDED';
  */
 export interface CommentResponse {
     commentId: number;
+    userId: number;           // 작성자 ID (삭제 권한 확인용)
     nickname: string;         // 작성자 닉네임
     content: string;          // 댓글 내용
     parentCommentId: number | null;  // 부모 댓글 ID (대댓글인 경우)
