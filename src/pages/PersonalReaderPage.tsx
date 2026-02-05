@@ -135,6 +135,14 @@ const PersonalReaderPage: React.FC = () => {
     const [aiMessages, setAiMessages] = useState<ChatMessage[]>([]);
     const [aiInput, setAiInput] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // AI 메시지 변경 시 자동 스크롤
+    useEffect(() => {
+        if (rightSidebarTab === 'ai' && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [aiMessages, isAiLoading, rightSidebarTab]);
 
     // 검색
     const [searchQuery, setSearchQuery] = useState('');
@@ -1888,7 +1896,7 @@ const PersonalReaderPage: React.FC = () => {
                                                     className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                                                 >
                                                     <div
-                                                        className={`p-3 rounded-lg text-sm max-w-[90%] ${msg.role === 'user'
+                                                        className={`p-3 rounded-lg text-sm max-w-[90%] whitespace-pre-wrap ${msg.role === 'user'
                                                             ? 'bg-emerald-500 text-white rounded-br-none'
                                                             : (theme.name === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-800') + ' rounded-bl-none'
                                                             }`}
@@ -1914,6 +1922,7 @@ const PersonalReaderPage: React.FC = () => {
                                                 응답 생성 중...
                                             </div>
                                         )}
+                                        <div ref={messagesEndRef} />
                                     </div>
                                     <div className="flex gap-2">
                                         <input
@@ -2552,7 +2561,7 @@ const PersonalReaderPage: React.FC = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 };
 
