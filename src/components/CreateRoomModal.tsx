@@ -10,13 +10,15 @@ interface CreateRoomModalProps {
     onRoomCreated: (roomId: number) => void;
 }
 
-// TTS 목소리 옵션
-const VOICE_OPTIONS = [
-    { id: 'male_1', name: '남성 1 (차분한)', gender: 'male' },
-    { id: 'male_2', name: '남성 2 (밝은)', gender: 'male' },
-    { id: 'female_1', name: '여성 1 (차분한)', gender: 'female' },
-    { id: 'female_2', name: '여성 2 (밝은)', gender: 'female' },
-    { id: 'ai_natural', name: 'AI 자연스러운', gender: 'neutral' },
+// TTS 목소리 옵션 (백엔드 VoiceType과 매핑)
+type VoiceType = 'SEONBI' | 'BORAM' | 'YUNA' | 'KYEON' | 'BITNA';
+
+const VOICE_OPTIONS: Array<{ id: VoiceType; name: string; description: string }> = [
+    { id: 'SEONBI', name: '선비', description: '남성 • 차분하고 안정적인 목소리' },
+    { id: 'BORAM', name: '보람', description: '여성 • 밝고 경쾌한 목소리' },
+    { id: 'YUNA', name: '유나', description: '여성 • 차분하고 부드러운 목소리' },
+    { id: 'KYEON', name: '견', description: '남성 • 힘있고 명확한 목소리' },
+    { id: 'BITNA', name: '빛나', description: '여성 • 따뜻하고 친근한 목소리' },
 ];
 
 // 속도 옵션
@@ -36,7 +38,7 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
 }) => {
     const [roomName, setRoomName] = useState('');
     const [selectedBook, setSelectedBook] = useState<Library | null>(null);
-    const [selectedVoice, setSelectedVoice] = useState(VOICE_OPTIONS[2].id);
+    const [selectedVoice, setSelectedVoice] = useState<VoiceType>('SEONBI');
     const [selectedSpeed, setSelectedSpeed] = useState(1.0);
     const [maxParticipants, setMaxParticipants] = useState(5);
 
@@ -55,7 +57,7 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
     const resetForm = () => {
         setRoomName('');
         setSelectedBook(null);
-        setSelectedVoice(VOICE_OPTIONS[2].id);
+        setSelectedVoice('SEONBI');
         setSelectedSpeed(1.0);
         setMaxParticipants(5);
         setError(null);
@@ -96,7 +98,7 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
             const roomId = await readingRoomService.createRoom({
                 libraryId: selectedBook.libraryId,
                 roomName: roomName.trim(),
-                voiceType: 'SEONBI', // 기본 목소리 타입
+                voiceType: selectedVoice, // 사용자가 선택한 목소리 타입
                 maxCapacity: maxParticipants,
             });
             onRoomCreated(roomId);
@@ -228,17 +230,18 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
                                         <Mic size={16} />
                                         TTS 목소리
                                     </label>
-                                    <div className="grid grid-cols-2 gap-2">
+                                    <div className="grid grid-cols-1 gap-2">
                                         {VOICE_OPTIONS.map((voice) => (
                                             <button
                                                 key={voice.id}
                                                 onClick={() => setSelectedVoice(voice.id)}
-                                                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${selectedVoice === voice.id
-                                                    ? 'bg-purple-500 text-white'
-                                                    : 'bg-slate-700 text-gray-300 hover:bg-slate-600'
+                                                className={`px-4 py-3 rounded-xl text-left transition-all ${selectedVoice === voice.id
+                                                    ? 'bg-purple-500/30 border-2 border-purple-500'
+                                                    : 'bg-slate-700 border-2 border-transparent hover:bg-slate-600'
                                                     }`}
                                             >
-                                                {voice.name}
+                                                <div className="font-medium text-white">{voice.name}</div>
+                                                <div className="text-xs text-gray-400 mt-0.5">{voice.description}</div>
                                             </button>
                                         ))}
                                     </div>
