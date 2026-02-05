@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // 백엔드 URL 설정 (환경변수나 상수로 관리 권장)
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+const API_BASE_URL = '/api/v1';
 
 export interface TtsResponse {
     url: string;         // S3 Presigned URL

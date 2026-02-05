@@ -131,7 +131,7 @@ export const authService = {
      * OAuth 리다이렉트 URL 가져오기
      */
     getOAuthUrl: (provider: 'google' | 'kakao' | 'naver'): string => {
-        return `http://localhost:8080/api/oauth2/authorization/${provider}`;
+        return `/api/oauth2/authorization/${provider}`;
     },
 
     /**
