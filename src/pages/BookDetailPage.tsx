@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     BookOpen, Star, ShoppingCart, Heart, Share2, ArrowLeft,
-    Clock, User, Calendar, Globe, Loader2, ChevronRight, AlertCircle,
+    User, Calendar, Globe, Loader2, ChevronRight, AlertCircle,
     ThumbsUp, ThumbsDown, Plus, Crown, Check, Package, BookMarked
 } from 'lucide-react';
 import Header from '../components/layout/Header';
@@ -62,6 +62,11 @@ const BookDetailPage: React.FC = () => {
             loadPurchasedBooks();
             loadCartItems();
             loadLibraryBooks();
+        } else {
+            // [Fix] 비회원이면 확인 로직 없이 로딩 상태 해제 (버튼 즉시 노출)
+            setIsLoadingPurchased(false);
+            setIsLoadingCart(false);
+            setIsLoadingLibrary(false);
         }
     }, [id, isAuthenticated]);
 

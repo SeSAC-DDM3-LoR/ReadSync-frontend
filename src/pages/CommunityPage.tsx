@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     MessageSquare, Plus, Eye, Heart, Clock, Loader2,
-    ChevronRight, Search, User
+    ChevronRight, Search
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';

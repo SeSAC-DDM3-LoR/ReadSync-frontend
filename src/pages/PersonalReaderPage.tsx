@@ -32,6 +32,7 @@ import {
 import {
     readingPulseService,
     getBookmarkByLibraryAndChapter,
+    getBookmarksByLibrary,
     type ReadingPulseRequest
 } from '../services/libraryService';
 import useAuthStore from '../stores/authStore';
@@ -137,8 +138,76 @@ const PersonalReaderPage: React.FC = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
+    // [New] 북마크 정보 가져오기 (챕터별 진행률 표시용) (상태 선언은 컴포넌트 최상단)
+    // 값 타입을 Bookmark 객체 자체로 변경 (readMask 활용)
+    const [chapterBookmarkMap, setChapterBookmarkMap] = useState<Map<number, any>>(new Map());
+
     // 텍스트 선택
     const [textSelection, setTextSelection] = useState<TextSelection | null>(null);
+
+    // [New] 라이브러리/북마크 정보 Fetch
+    useEffect(() => {
+        const fetchBookmarks = async () => {
+            if (!libraryId) return;
+            try {
+                const bookmarks = await getBookmarksByLibrary(parseInt(libraryId));
+                // Map<chapterId, Bookmark>
+                const bookmarkMap = new Map<number, any>();
+                bookmarks.forEach(b => {
+                    bookmarkMap.set(b.chapterId, b);
+                });
+
+                // [Optimistic UI] 이전 페이지 등에서 넘겨준 최신 상태가 있으면 덮어쓰기
+                // (백엔드 반영 지연 시에도 즉시 UI 업데이트 보장)
+                const loc = location as any;
+                if (loc.state?.optimisticBookmark) {
+                    const opt = loc.state.optimisticBookmark;
+                    // 현재 라이브러리의 북마크인지 확인
+                    if (opt.libraryId === parseInt(libraryId)) {
+                        bookmarkMap.set(opt.chapterId, opt);
+                        // Ref에도 최신화
+                        optimisticUpdatesRef.current.set(opt.chapterId, opt);
+                    }
+                }
+
+                // [Ref Persistence] Ref에 저장된 optimistic 데이터가 있으면 무조건 덮어쓰기
+                // (서버 데이터보다 우리가 방금 계산한 게 더 최신일 확률 100%)
+                optimisticUpdatesRef.current.forEach((val, key) => {
+                    if (val.libraryId === parseInt(libraryId)) {
+                        bookmarkMap.set(key, val);
+                    }
+                });
+
+                setChapterBookmarkMap(bookmarkMap);
+            } catch (err) {
+                console.error("Failed to fetch bookmarks:", err);
+            }
+        };
+        fetchBookmarks();
+    }, [libraryId, chapterId, location]); // location.state 변경 시에도 실행
+
+    // [New] 나가기 핸들러 (Optimistic UI)
+    const handleExit = async () => {
+        if (!libraryId || !chapterId) {
+            navigate('/library');
+            return;
+        }
+
+        // 마지막 상태 캡처
+        const currentProgress = Math.round(((currentPage + 1) / totalPages) * 100) || 0;
+
+        // 비동기 펄스 전송 (기다리지 않거나 짧게만 기다림)
+        sendReadingPulse();
+
+        navigate('/library', {
+            state: {
+                updatedLibraryId: parseInt(libraryId),
+                updatedProgress: currentProgress,
+                lastReadChapterId: parseInt(chapterId),
+                timestamp: Date.now()
+            }
+        });
+    };
 
     // 댓글
     // 댓글
@@ -154,6 +223,7 @@ const PersonalReaderPage: React.FC = () => {
     const currentPageRef = useRef<number>(0);  // 현재 페이지를 ref로 추적하여 의존성 문제 해결
     const pagesRef = useRef<PageContent[]>([]);  // pages를 ref로 추적하여 callback 의존성 안정화
     const lastLeftPageFirstParagraphRef = useRef<number>(0);  // 왼쪽 페이지 첫 문단 추적 (fallback용)
+    const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // [New] 디바운스 타이머 Refs
 
     // 마지막 읽은 위치 복원
     const [initialPosition, setInitialPosition] = useState<number | null>(null);
@@ -397,8 +467,14 @@ const PersonalReaderPage: React.FC = () => {
     }, [currentPage, pages]);
 
     // 독서 펄스 전송 함수 (의존성 최소화하여 interval 재생성 방지)
-    const sendReadingPulse = useCallback(async () => {
+    const sendReadingPulse = useCallback(async (isForce: boolean = false) => {
         if (!libraryId || !chapterId) return;
+
+        // [New] 강제 전송 시 예비된 디바운스 타이머 취소 (중복 전송 방지)
+        if (isForce && debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+            debounceTimerRef.current = null;
+        }
 
         const now = Date.now();
         const readTimeSeconds = Math.floor((now - readStartTimeRef.current) / 1000);
@@ -435,8 +511,8 @@ const PersonalReaderPage: React.FC = () => {
             }
         }
 
-        // 읽은 시간이 5초 미만이고 문단도 없으면 스킵
-        if (readTimeSeconds < 5 && paragraphs.length === 0) return;
+        // 강제 전송이 아니고, 읽은 시간이 3초 미만이며 문단도 없으면 스킵
+        if (!isForce && readTimeSeconds < 3 && paragraphs.length === 0) return;
 
         // 유효하지 않은 위치(0)면 펄스 전송 스킵 (데이터 손상 방지)
         if (lastReadPos === 0) {
@@ -459,7 +535,9 @@ const PersonalReaderPage: React.FC = () => {
 
         // 리셋
         readStartTimeRef.current = now;
-        readParagraphsRef.current.clear();
+        // [Fix] 펄스 전송 후에도 세션 기록(Green Bar) 유지 (화면 깜빡임 방지)
+        // 챕터가 바뀔 때만(useEffect) clear() 하도록 수정
+        // readParagraphsRef.current.clear(); -> 삭제됨
     }, [libraryId, chapterId, getCurrentParagraphIndex]);  // pages 의존성 제거 - pagesRef 사용으로 불필요
 
     // sendReadingPulse의 최신 버전을 ref로 유지 (interval에서 사용)
@@ -467,6 +545,17 @@ const PersonalReaderPage: React.FC = () => {
     useEffect(() => {
         sendReadingPulseRef.current = sendReadingPulse;
     }, [sendReadingPulse]);
+
+    // [New] 디바운스 펄스 전송 (빠른 페이지 넘김 시 API 과부하 방지)
+    const debouncedSendPulse = useCallback(() => {
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+        debounceTimerRef.current = setTimeout(() => {
+            sendReadingPulseRef.current();
+            debounceTimerRef.current = null;
+        }, 2000); // 2초 대기
+    }, []);
 
     // 5분 간격 자동 펄스 전송 (챕터가 바뀔 때만 interval 재생성)
     useEffect(() => {
@@ -1230,20 +1319,45 @@ const PersonalReaderPage: React.FC = () => {
     // ==================== Navigation ====================
 
     const goToNextPage = useCallback(() => {
+        // [Fix] 페이지 이동 시 현재 페이지의 문단들을 세션 기록에 '즉시' 반영 (Green Bar Lag 해결)
+        // useEffect보다 먼저 실행되어, 다음 페이지 렌더링 시점에 이미 '읽음'으로 처리됨
+        if (pages[currentPage]) {
+            pages[currentPage].items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    readParagraphsRef.current.add(parseInt(match[1]));
+                }
+            });
+            // [Fix] 페이지 넘길 때마다 진행률 저장 시도 (사용자 요청: "Apply progress")
+            // [Debounce] 빠른 페이지 넘김 시 API 스팸 방지를 위해 디바운스 적용
+            debouncedSendPulse();
+        }
+
         if (currentPage + 2 < totalPages) {
             setCurrentPage(prev => prev + 2);
         } else if (currentPage + 1 < totalPages) {
             setCurrentPage(totalPages - 1);
         }
-    }, [currentPage, totalPages]);
+    }, [currentPage, totalPages, pages, sendReadingPulse]);
 
     const goToPreviousPage = useCallback(() => {
+        // 이전 페이지로 갈 때도 현재 페이지 읽음 처리
+        if (pages[currentPage]) {
+            pages[currentPage].items.forEach(item => {
+                const match = item.originalId?.match(/p_(\d+)/);
+                if (match) {
+                    readParagraphsRef.current.add(parseInt(match[1]));
+                }
+            });
+            debouncedSendPulse();
+        }
+
         if (currentPage >= 2) {
             setCurrentPage(prev => prev - 2);
         } else {
             setCurrentPage(0);
         }
-    }, [currentPage]);
+    }, [currentPage, pages, sendReadingPulse]);
 
     const goToPage = (pageNum: number) => {
         const targetPage = Math.max(0, Math.min(pageNum - 1, totalPages - 1));
@@ -1251,26 +1365,78 @@ const PersonalReaderPage: React.FC = () => {
         setCurrentPage(targetPage % 2 === 0 ? targetPage : targetPage - 1);
     };
 
-    const goToChapter = async (newChapterId: number) => {
-        // 현재 챕터에서 나가기 전에 펄스 전송
-        await sendReadingPulse();
+    // [New] Optimistic Updates 보관용 Ref (서버 데이터가 잠시 stale 해도 이걸로 덮어씌움)
+    const optimisticUpdatesRef = useRef<Map<number, any>>(new Map());
 
-        navigate(`/reader/${libraryId}/${newChapterId}`);
+    const goToChapter = async (newChapterId: number) => {
+        // [Optimistic UI] 현재 챕터 정보 계산
+        let optimisticBookmark = null;
+        if (chapterId && chapterBookmarkMap) {
+            const cid = parseInt(chapterId);
+            const baseBookmark = chapterBookmarkMap.get(cid);
+            const currentReadIndices = Array.from(readParagraphsRef.current);
+            const totalParagraphs = bookContentData?.paragraphs || 1;
+
+            // 1. 기존 마스크 가져오기 (Base64 -> Binary String)
+            let baseMask = "";
+            if (baseBookmark?.readMask) {
+                try {
+                    baseMask = atob(baseBookmark.readMask);
+                } catch (e) { baseMask = ""; }
+            }
+            // 마스크 길이가 부족하면 0으로 채움
+            if (baseMask.length < totalParagraphs) {
+                baseMask = baseMask + "0".repeat(totalParagraphs - baseMask.length);
+            }
+
+            // 2. 새 마스크 생성 (기존 + 신규)
+            const newMaskChars = baseMask.split('');
+            currentReadIndices.forEach(idx => {
+                if (idx >= 1 && idx <= newMaskChars.length) {
+                    newMaskChars[idx - 1] = '1';
+                }
+            });
+            const updatedMaskString = newMaskChars.join('');
+
+            // 3. 진행률 계산
+            const readCount = updatedMaskString.split('').filter(c => c === '1').length;
+            const updatedProgress = (readCount / totalParagraphs) * 100;
+
+            // 4. Optimistic Bookmark 객체 생성
+            optimisticBookmark = {
+                ...baseBookmark,
+                chapterId: cid,
+                progress: updatedProgress,
+                // 백엔드 포맷(Base64)으로 다시 인코딩하여 저장
+                readMask: btoa(updatedMaskString),
+                libraryId: parseInt(libraryId || "0")
+            };
+
+            // [핵심] Ref에 저장하여 이후 fetchBookmarks에서도 살아남게 함
+            optimisticUpdatesRef.current.set(cid, optimisticBookmark);
+        }
+
+        // 현재 챕터에서 나가기 전에 펄스 전송 (강제 전송)
+        await sendReadingPulse(true);
+
+        navigate(`/reader/${libraryId}/${newChapterId}`, {
+            state: {
+                optimisticBookmark
+            }
+        });
+
+        // 챕터 이동 시 스크롤 최상단으로 (ReaderPage에서 처리하겠지만 명시적으로)
+        window.scrollTo(0, 0);
         setCurrentPage(0);
         setShowRightSidebar(false);
 
-        // 새 챕터 진입 시 초기화
-        initialPositionApplied.current = false;
-        setInitialPosition(null);
+        // 초기화
+        setTextSelection(null);
     };
 
 
 
-    const handleExit = async () => {
-        // 나가기 전에 펄스 전송 (데이터 동기화)
-        await sendReadingPulse();
-        navigate('/library');
-    };
+
 
     // ==================== Click Handlers ====================
 
@@ -1720,18 +1886,171 @@ const PersonalReaderPage: React.FC = () => {
                             {rightSidebarTab === 'toc' && (
                                 <div className="space-y-2">
                                     <h3 className="font-bold mb-4">목차</h3>
-                                    {chapters.map(ch => (
-                                        <button
-                                            key={ch.chapterId}
-                                            onClick={() => goToChapter(ch.chapterId)}
-                                            className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${ch.chapterId === chapter?.chapterId
-                                                ? 'bg-emerald-500/20 text-emerald-600'
-                                                : 'hover:bg-black/5'
-                                                }`}
-                                        >
-                                            {ch.chapterName}
-                                        </button>
-                                    ))}
+                                    {/* (Update chapters.map logic) */}
+                                    {chapters.map(ch => {
+                                        // 1. 현재 챕터 여부
+                                        const isCurrent = ch.chapterId === chapter?.chapterId;
+                                        // 2. 저장된 북마크 정보
+                                        const bookmark = chapterBookmarkMap.get(ch.chapterId);
+                                        const readMaskBase64 = bookmark?.readMask || "";
+                                        let readMask = "";
+
+                                        // Base64 디코딩 (백엔드에서 byte[]로 보냄)
+                                        if (readMaskBase64) {
+                                            try {
+                                                readMask = atob(readMaskBase64);
+                                            } catch (e) {
+                                                console.error("Base64 decode failed:", e);
+                                                readMask = "";
+                                            }
+                                        }
+
+                                        // [New] 현재 읽고 있는 위치(문단) 식별 (Left & Right Spread)
+                                        const currentParagraphSet = new Set<number>();
+                                        const leftParagraphs: number[] = [];
+                                        const rightParagraphs: number[] = [];
+
+                                        // 1. Left Page
+                                        if (isCurrent && pages[currentPage]) {
+                                            pages[currentPage].items.forEach(item => {
+                                                const match = item.originalId?.match(/p_(\d+)/);
+                                                if (match) {
+                                                    const pId = parseInt(match[1]);
+                                                    currentParagraphSet.add(pId);
+                                                    leftParagraphs.push(pId);
+                                                }
+                                            });
+                                        }
+
+                                        // 2. Right Page (펼침면이므로 오른쪽 페이지도 '읽음'에 포함)
+                                        if (isCurrent && currentPage + 1 < pages.length && pages[currentPage + 1]) {
+                                            pages[currentPage + 1].items.forEach(item => {
+                                                const match = item.originalId?.match(/p_(\d+)/);
+                                                if (match) {
+                                                    const pId = parseInt(match[1]);
+                                                    currentParagraphSet.add(pId);
+                                                    rightParagraphs.push(pId);
+                                                }
+                                            });
+                                        }
+
+                                        // 마스크 파싱 (길이가 없으면 0으로 채움)
+                                        // [Fix] chapter.paragraphs가 부정확할 경우를 대비하여, 현재 읽은 위치(maxCurrentP)나 마스크 길이 중 가장 큰 값을 사용
+                                        const maxCurrentP = isCurrent
+                                            ? Math.max(0, ...Array.from(readParagraphsRef.current), ...Array.from(currentParagraphSet))
+                                            : 0;
+                                        const totalSegments = Math.max(ch.paragraphs || 0, readMask.length, maxCurrentP, 1);
+
+                                        // 마스크가 없는 경우(읽은 적 없음) '0'으로 채워진 문자열 생성
+                                        const maskString = readMask.length >= totalSegments
+                                            ? readMask
+                                            : readMask + "0".repeat(Math.max(0, totalSegments - readMask.length));
+
+                                        // 시각화용 세그먼트 배열 생성
+                                        const segments = Array.from({ length: totalSegments }, (_, i) => maskString[i] === '1');
+
+                                        // [New] 실시간 진행률 계산
+                                        // segments: 기존 북마크의 읽음 상태 (boolean[])
+                                        // readParagraphsRef: 이번 세션에서 읽은 문단들
+                                        // currentParagraphSet: 지금 보고 있는 페이지의 문단들
+                                        let sessionReadCount = 0;
+                                        if (isCurrent) {
+                                            // 현재 챕터라면, 기존 마스크 + 세션 기록 + 현재 페이지 모두 합산
+                                            sessionReadCount = Array.from({ length: totalSegments }).filter((_, i) => {
+                                                const pNum = i + 1;
+                                                const isBookmarkRead = segments[i]; // 기존 북마크
+                                                const isSessionRead = readParagraphsRef.current.has(pNum); // 이번 세션
+                                                const isNowReading = currentParagraphSet.has(pNum); // 현재 페이지
+                                                return isBookmarkRead || isSessionRead || isNowReading;
+                                            }).length;
+                                        } else {
+                                            // 다른 챕터는 기존 북마크 기준
+                                            sessionReadCount = segments.filter(Boolean).length;
+                                        }
+
+                                        const dynamicProgress = totalSegments > 0 ? (sessionReadCount / totalSegments) * 100 : 0;
+
+                                        // [New] 커서 위치 결정 (사용자 요청: 오른쪽 페이지 우선, 없으면 왼쪽 페이지)
+                                        // -> 펼쳐진 면의 '가장 마지막 문단'을 가리키는 것이 직관적임
+                                        let cursorPositionPercent = -1;
+                                        if (isCurrent && currentParagraphSet.size > 0) {
+                                            let targetP = 0;
+                                            if (rightParagraphs.length > 0) {
+                                                targetP = Math.max(...rightParagraphs);
+                                            } else if (leftParagraphs.length > 0) {
+                                                targetP = Math.max(...leftParagraphs);
+                                            } else {
+                                                targetP = Math.max(...Array.from(currentParagraphSet));
+                                            }
+
+                                            if (targetP >= 1 && totalSegments > 0) {
+                                                // [Fix] 커서 위치를 문단의 '끝'으로 조정
+                                                cursorPositionPercent = (targetP / totalSegments) * 100;
+                                            }
+                                        }
+
+                                        return (
+                                            <button
+                                                key={ch.chapterId}
+                                                onClick={() => goToChapter(ch.chapterId)}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors mb-1 ${isCurrent
+                                                    ? 'bg-emerald-500/10'
+                                                    : 'hover:bg-black/5'
+                                                    }`}
+                                            >
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <span className={`font-medium ${isCurrent ? 'text-emerald-700' : 'text-gray-700'}`}>
+                                                        {ch.chapterName}
+                                                    </span>
+                                                    {/* 퍼센트 항상 표시 (실시간 반영) */}
+                                                    <span className="text-xs opacity-50 font-mono">
+                                                        {Math.round(dynamicProgress)}%
+                                                    </span>
+                                                </div>
+
+                                                {/* 진행바 항상 표시 (ReadMask 바코드 스타일) */}
+                                                <div className="w-full h-2 bg-gray-100 rounded-sm overflow-hidden flex relative">
+                                                    {/* 현재 위치 커서 (노란색, 고정 크기) */}
+                                                    {cursorPositionPercent >= 0 && (
+                                                        <div
+                                                            className="absolute top-0 bottom-0 bg-amber-400 z-10 shadow-[0_0_2px_rgba(0,0,0,0.3)]"
+                                                            style={{
+                                                                left: `${cursorPositionPercent}%`,
+                                                                width: '4px', // 고정 크기
+                                                                transform: 'translateX(-50%)' // 중앙 정렬
+                                                            }}
+                                                        />
+                                                    )}
+
+                                                    {segments.map((isReadFromBookmark, idx) => {
+                                                        // idx는 0부터 시작하므로 문단 번호는 idx + 1
+                                                        const pNum = idx + 1;
+
+                                                        // 1. 현재 화면에 보고 있더라도 바코드 색상은 변경하지 않음 (커서로 대체) -> [Fix] 초록색(읽음)으로 즉시 반영
+                                                        const isReadingNow = currentParagraphSet.has(pNum);
+
+                                                        // 2. 이번 세션에서 읽은 문단 (차선: 초록색)
+                                                        // Ref에 저장된 기록 확인 (isCurrent일 때만 유효)
+                                                        const isReadInSession = isCurrent && readParagraphsRef.current.has(pNum);
+
+                                                        // 3. 기존 북마크에서 읽음 처리된 문단 (기본: 초록색)
+                                                        // [Fix] 현재 보고 있는 문단도 '읽음(Green)'에 포함시켜 퍼센트와 시각적 바를 일치시킴 (Zero Latency)
+                                                        const isRead = isReadFromBookmark || isReadInSession || isReadingNow;
+
+                                                        const bgColor = isRead ? 'bg-emerald-400' : 'bg-transparent';
+
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                className={`flex-1 ${bgColor}`}
+                                                            // minWidth 삭제로 전체 너비에 맞춤
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             )}
 

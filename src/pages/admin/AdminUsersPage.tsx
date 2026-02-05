@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle, Bell,
+    LayoutDashboard, Users, BookOpen, AlertTriangle,
     Search, Shield, ChevronLeft, ChevronRight, Loader2,
 
 } from 'lucide-react';
@@ -200,7 +200,7 @@ const AdminSidebar: React.FC<{ active: string }> = ({ active }) => {
         { path: '/admin/users', key: 'users', label: '회원 관리', icon: Users },
         { path: '/admin/books', key: 'books', label: '도서 관리', icon: BookOpen },
         { path: '/admin/reports', key: 'reports', label: '신고 관리', icon: AlertTriangle },
-        { path: '/admin/notices', key: 'notices', label: '공지 관리', icon: Bell },
+        // { path: '/admin/notices', key: 'notices', label: '공지 관리', icon: Bell },
     ];
 
     return (

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Search, Filter, BookOpen, Star, ChevronLeft, ChevronRight, Loader2, Crown } from 'lucide-react';
+import { Search, BookOpen, ChevronLeft, ChevronRight, Loader2, Crown } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import { bookService, categoryService } from '../services/bookService';
@@ -161,8 +161,8 @@ const BooksPage: React.FC = () => {
                                                 key={pageNum}
                                                 onClick={() => handlePageChange(pageNum)}
                                                 className={`w-10 h-10 rounded-xl font-bold transition-colors ${pageNum === currentPage
-                                                        ? 'bg-emerald-500 text-white'
-                                                        : 'bg-white border border-emerald-200 hover:bg-emerald-50'
+                                                    ? 'bg-emerald-500 text-white'
+                                                    : 'bg-white border border-emerald-200 hover:bg-emerald-50'
                                                     }`}
                                             >
                                                 {pageNum + 1}

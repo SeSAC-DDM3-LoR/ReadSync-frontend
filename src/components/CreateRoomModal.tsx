@@ -93,13 +93,10 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
         setError(null);
 
         try {
-            // 프리미엄 보이스 여부 결정
-            const voiceType = selectedVoice === 'ai_natural' ? 'PREMIUM' : 'BASIC';
-
             const roomId = await readingRoomService.createRoom({
-                libraryId: selectedBook.libraryId,  // 백엔드는 libraryId 필요
+                libraryId: selectedBook.libraryId,
                 roomName: roomName.trim(),
-                voiceType: voiceType as 'BASIC' | 'PREMIUM',
+                voiceType: 'SEONBI', // 기본 목소리 타입
                 maxCapacity: maxParticipants,
             });
             onRoomCreated(roomId);

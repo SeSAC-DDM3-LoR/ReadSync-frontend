@@ -79,6 +79,9 @@ const AdminLoginPage: React.FC = () => {
                     levelId: 99,
                     experience: 99999,
                     preferredGenre: null,
+                    readBookCount: 0,
+                    reviewCount: 0,
+                    totalCredit: 0,
                 };
                 setUser(mockUser);
                 navigate('/admin/dashboard');
