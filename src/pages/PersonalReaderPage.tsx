@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Settings, Search, List,
     Sparkles, X, Send, Highlighter, StickyNote,
-    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle, Trash2
+    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle, Trash2, Flag
 } from 'lucide-react';
 // 리더 관련 서비스 (책 콘텐츠, 챕터)
 import {
@@ -21,6 +21,8 @@ import {
     type CommentResponse,
     type LikeType
 } from '../services/commentService';
+// 신고 서비스
+import reportService from '../services/reportService';
 // AI 채팅 서비스
 import {
     aiChatService,
@@ -216,6 +218,13 @@ const PersonalReaderPage: React.FC = () => {
     const [isCommentLoading, setIsCommentLoading] = useState(false);
     // 스포일러 댓글 공개 상태 관리 (Map<commentId, isRevealed>)
     const [spoilerRevealedMap, setSpoilerRevealedMap] = useState<Map<number, boolean>>(new Map());
+    // 댓글 신고 관련 상태
+    const [reportingCommentId, setReportingCommentId] = useState<number | null>(null);
+    const [reportReasonType, setReportReasonType] = useState<'SPOILER' | 'ABUSE' | 'ADVERTISEMENT'>('ABUSE');
+    const [reportReason, setReportReason] = useState('');
+    const [showReportModal, setShowReportModal] = useState(false);
+    // 현재 로그인한 사용자
+    const currentUser = useAuthStore(state => state.user);
 
     // 독서 이벤트 추적 (Reading Pulse)
     const readStartTimeRef = useRef<number>(Date.now());
@@ -1594,6 +1603,27 @@ const PersonalReaderPage: React.FC = () => {
         });
     };
 
+    const handleReportComment = async () => {
+        if (!reportReason.trim() || !reportingCommentId) return;
+
+        try {
+            await reportService.reportContent(
+                reportingCommentId,
+                'CHAPTERS_COMMENT',
+                reportReasonType,
+                reportReason
+            );
+            alert('신고가 접수되었습니다.');
+            setShowReportModal(false);
+            setReportingCommentId(null);
+            setReportReasonType('ABUSE');
+            setReportReason('');
+        } catch (error) {
+            console.error('댓글 신고 실패:', error);
+            alert('댓글 신고에 실패했습니다.');
+        }
+    };
+
     const handleToggleLike = async (commentId: number, likeType: LikeType) => {
         try {
             const response = await likeService.toggleCommentLike(commentId, likeType);
@@ -2132,8 +2162,7 @@ const PersonalReaderPage: React.FC = () => {
                                         <div className="space-y-3">
                                             {comments.map(comment => {
                                                 const isRevealed = spoilerRevealedMap.get(comment.commentId) || false;
-                                                const currentUser = useAuthStore.getState().user;
-                                                const isMyComment = currentUser && comment.userId === currentUser.id;
+                                                const isMyComment = currentUser && comment.userId === currentUser.userId;
 
                                                 return (
                                                     <div
@@ -2149,13 +2178,24 @@ const PersonalReaderPage: React.FC = () => {
                                                                 <span className="text-xs opacity-50">
                                                                     {new Date(comment.createdAt).toLocaleDateString()}
                                                                 </span>
-                                                                {isMyComment && (
+                                                                {isMyComment ? (
                                                                     <button
                                                                         onClick={() => handleDeleteComment(comment.commentId)}
-                                                                        className="p-1 hover:bg-red-500/10 rounded transition-colors"
+                                                                        className="p-1.5 hover:bg-red-500/10 rounded transition-colors text-red-500"
                                                                         title="댓글 삭제"
                                                                     >
-                                                                        <Trash2 size={14} className="text-red-500" />
+                                                                        <Trash2 size={16} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setReportingCommentId(comment.commentId);
+                                                                            setShowReportModal(true);
+                                                                        }}
+                                                                        className="p-1.5 hover:bg-gray-500/10 rounded transition-colors opacity-60 hover:opacity-100"
+                                                                        title="댓글 신고"
+                                                                    >
+                                                                        <Flag size={16} />
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -2181,20 +2221,36 @@ const PersonalReaderPage: React.FC = () => {
                                                             </div>
                                                         )}
                                                         <div className="flex items-center gap-3 mt-2">
-                                                            <button
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.9 }}
                                                                 onClick={() => handleToggleLike(comment.commentId, 'LIKE')}
-                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
                                                             >
                                                                 <ThumbsUp size={14} />
-                                                                {comment.likeCount || 0}
-                                                            </button>
-                                                            <button
+                                                                <motion.span
+                                                                    key={`like-${comment.commentId}-${comment.likeCount}`}
+                                                                    initial={{ scale: 1.5, opacity: 0 }}
+                                                                    animate={{ scale: 1, opacity: 1 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                >
+                                                                    {comment.likeCount || 0}
+                                                                </motion.span>
+                                                            </motion.button>
+                                                            <motion.button
+                                                                whileTap={{ scale: 0.9 }}
                                                                 onClick={() => handleToggleLike(comment.commentId, 'DISLIKE')}
-                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100 transition-opacity"
                                                             >
                                                                 <ThumbsDown size={14} />
-                                                                {comment.dislikeCount || 0}
-                                                            </button>
+                                                                <motion.span
+                                                                    key={`dislike-${comment.commentId}-${comment.dislikeCount}`}
+                                                                    initial={{ scale: 1.5, opacity: 0 }}
+                                                                    animate={{ scale: 1, opacity: 1 }}
+                                                                    transition={{ duration: 0.2 }}
+                                                                >
+                                                                    {comment.dislikeCount || 0}
+                                                                </motion.span>
+                                                            </motion.button>
                                                         </div>
                                                     </div>
                                                 );
@@ -2297,6 +2353,116 @@ const PersonalReaderPage: React.FC = () => {
                             <Sparkles size={16} />
                             AI 검색
                         </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 신고 모달 */}
+            <AnimatePresence>
+                {showReportModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => setShowReportModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="rounded-2xl p-6 max-w-md w-full shadow-2xl"
+                            style={{
+                                backgroundColor: theme.bg,
+                                color: theme.text
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-xl font-bold">댓글 신고</h3>
+                                <button
+                                    onClick={() => setShowReportModal(false)}
+                                    className="p-2 hover:bg-black/10 rounded-lg"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2">
+                                    신고 유형
+                                </label>
+                                <div className="space-y-2 mb-4">
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="ABUSE"
+                                            checked={reportReasonType === 'ABUSE'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'ABUSE')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">욕설/비방</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="SPOILER"
+                                            checked={reportReasonType === 'SPOILER'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'SPOILER')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">스포일러</span>
+                                    </label>
+                                    <label className="flex items-center gap-2 cursor-pointer">
+                                        <input
+                                            type="radio"
+                                            name="reportType"
+                                            value="ADVERTISEMENT"
+                                            checked={reportReasonType === 'ADVERTISEMENT'}
+                                            onChange={(e) => setReportReasonType(e.target.value as 'ADVERTISEMENT')}
+                                            className="cursor-pointer"
+                                        />
+                                        <span className="text-sm">광고</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium mb-2">
+                                    상세 사유
+                                </label>
+                                <textarea
+                                    value={reportReason}
+                                    onChange={(e) => setReportReason(e.target.value)}
+                                    placeholder="상세 사유를 입력해 주세요"
+                                    className="w-full px-3 py-2 rounded-lg border text-sm resize-none"
+                                    style={{
+                                        backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#FFF',
+                                        borderColor: theme.name === 'dark' ? '#444' : '#DDD',
+                                        color: theme.text
+                                    }}
+                                    rows={4}
+                                />
+                            </div>
+
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => setShowReportModal(false)}
+                                    className="flex-1 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100"
+                                >
+                                    취소
+                                </button>
+                                <button
+                                    onClick={handleReportComment}
+                                    disabled={!reportReason.trim()}
+                                    className="flex-1 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    신고
+                                </button>
+                            </div>
+                        </motion.div>
                     </motion.div>
                 )}
             </AnimatePresence>
