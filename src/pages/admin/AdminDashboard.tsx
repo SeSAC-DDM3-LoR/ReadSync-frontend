@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
     LayoutDashboard, Users, BookOpen, AlertTriangle,
-    TrendingUp, ArrowUpRight, Loader2, Shield
+    TrendingUp, ArrowUpRight, Loader2, Shield, MessageSquareWarning
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { adminUserService, adminReportService, adminBookService } from '../../services/adminService';
@@ -67,7 +67,8 @@ const AdminDashboard: React.FC = () => {
     const menuItems = [
         { path: '/admin/users', label: '회원 관리', icon: Users },
         { path: '/admin/books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle },
+        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
+        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
         // { path: '/admin/notices', label: '공지 관리', icon: Bell },
     ];
 
