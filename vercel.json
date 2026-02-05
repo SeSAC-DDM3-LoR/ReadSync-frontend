@@ -1,12 +1,12 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "http://readsync-server-env.eba-kmsyp7xt.ap-northeast-2.elasticbeanstalk.com/api/:path*"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ]
+    "rewrites": [
+        {
+            "source": "/api/v1/:path*",
+            "destination": "http://Readsync-server-env.eba-auskxygg.ap-northeast-2.elasticbeanstalk.com/api/v1/:path*"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
 }
