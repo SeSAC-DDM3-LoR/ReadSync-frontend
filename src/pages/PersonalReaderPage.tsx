@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     ChevronLeft, Settings, Search, List,
     Sparkles, X, Send, Highlighter, StickyNote,
-    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle
+    Moon, Sun, Minus, Plus, Loader2, ThumbsUp, ThumbsDown, AlertCircle, Trash2
 } from 'lucide-react';
 // 리더 관련 서비스 (책 콘텐츠, 챕터)
 import {
@@ -210,11 +210,12 @@ const PersonalReaderPage: React.FC = () => {
     };
 
     // 댓글
-    // 댓글
     const [comments, setComments] = useState<CommentResponse[]>([]);
     const [newComment, setNewComment] = useState('');
     const [isSpoiler, setIsSpoiler] = useState(false);
     const [isCommentLoading, setIsCommentLoading] = useState(false);
+    // 스포일러 댓글 공개 상태 관리 (Map<commentId, isRevealed>)
+    const [spoilerRevealedMap, setSpoilerRevealedMap] = useState<Map<number, boolean>>(new Map());
 
     // 독서 이벤트 추적 (Reading Pulse)
     const readStartTimeRef = useRef<number>(Date.now());
@@ -1554,27 +1555,54 @@ const PersonalReaderPage: React.FC = () => {
         if (!newComment.trim() || !chapterId) return;
 
         try {
-            await commentService.createComment(parseInt(chapterId), {
+            const createdComment = await commentService.createComment(parseInt(chapterId), {
                 content: newComment,
                 isSpoiler,
             });
+            // Optimistic UI: 댓글을 즉시 목록에 추가
+            setComments(prev => [...prev, createdComment]);
             setNewComment('');
             setIsSpoiler(false);
-            // 댓글 목록 새로고침
-            loadComments(parseInt(chapterId));
         } catch (error) {
             console.error('댓글 작성 실패:', error);
             alert('댓글 작성에 실패했습니다.');
+            // 에러 발생 시 목록 새로고침으로 동기화
+            if (chapterId) {
+                loadComments(parseInt(chapterId));
+            }
         }
+    };
+
+    const handleDeleteComment = async (commentId: number) => {
+        if (!confirm('댓글을 삭제하시겠습니까?')) return;
+
+        try {
+            await commentService.deleteComment(commentId);
+            // 댓글 목록에서 제거
+            setComments(prev => prev.filter(c => c.commentId !== commentId));
+        } catch (error) {
+            console.error('댓글 삭제 실패:', error);
+            alert('댓글 삭제에 실패했습니다.');
+        }
+    };
+
+    const toggleSpoilerReveal = (commentId: number) => {
+        setSpoilerRevealedMap(prev => {
+            const newMap = new Map(prev);
+            newMap.set(commentId, !newMap.get(commentId));
+            return newMap;
+        });
     };
 
     const handleToggleLike = async (commentId: number, likeType: LikeType) => {
         try {
-            await likeService.toggleCommentLike(commentId, likeType);
-            // 댓글 목록 새로고침
-            if (chapterId) {
-                loadComments(parseInt(chapterId));
-            }
+            const response = await likeService.toggleCommentLike(commentId, likeType);
+            // 댓글 목록에서 해당 댓글의 카운트만 업데이트
+            setComments(prev => prev.map(comment =>
+                comment.commentId === commentId
+                    ? { ...comment, likeCount: response.likeCount, dislikeCount: response.dislikeCount }
+                    : comment
+            ));
         } catch (error) {
             console.error('좋아요 토글 실패:', error);
         }
@@ -2102,44 +2130,75 @@ const PersonalReaderPage: React.FC = () => {
                                         </p>
                                     ) : (
                                         <div className="space-y-3">
-                                            {comments.map(comment => (
-                                                <div
-                                                    key={comment.commentId}
-                                                    className="p-3 rounded-lg"
-                                                    style={{
-                                                        backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#F5F5F5'
-                                                    }}
-                                                >
-                                                    <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-sm font-medium">{comment.nickname}</span>
-                                                        <span className="text-xs opacity-50">
-                                                            {new Date(comment.createdAt).toLocaleDateString()}
-                                                        </span>
+                                            {comments.map(comment => {
+                                                const isRevealed = spoilerRevealedMap.get(comment.commentId) || false;
+                                                const currentUser = useAuthStore.getState().user;
+                                                const isMyComment = currentUser && comment.userId === currentUser.id;
+
+                                                return (
+                                                    <div
+                                                        key={comment.commentId}
+                                                        className="p-3 rounded-lg"
+                                                        style={{
+                                                            backgroundColor: theme.name === 'dark' ? '#2A2A2A' : '#F5F5F5'
+                                                        }}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-sm font-medium">{comment.nickname}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-xs opacity-50">
+                                                                    {new Date(comment.createdAt).toLocaleDateString()}
+                                                                </span>
+                                                                {isMyComment && (
+                                                                    <button
+                                                                        onClick={() => handleDeleteComment(comment.commentId)}
+                                                                        className="p-1 hover:bg-red-500/10 rounded transition-colors"
+                                                                        title="댓글 삭제"
+                                                                    >
+                                                                        <Trash2 size={14} className="text-red-500" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        {comment.isSpoiler && !isRevealed ? (
+                                                            <button
+                                                                onClick={() => toggleSpoilerReveal(comment.commentId)}
+                                                                className="text-sm text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
+                                                            >
+                                                                ⚠️ 해당 댓글은 스포일러성 내용이 포함되어 있습니다. 보시려면 클릭해 주세요.
+                                                            </button>
+                                                        ) : (
+                                                            <div>
+                                                                {comment.isSpoiler && (
+                                                                    <button
+                                                                        onClick={() => toggleSpoilerReveal(comment.commentId)}
+                                                                        className="text-xs text-red-500 mb-1 hover:underline cursor-pointer"
+                                                                    >
+                                                                        [스포일러] 숨기기
+                                                                    </button>
+                                                                )}
+                                                                <p className="text-sm">{comment.content}</p>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex items-center gap-3 mt-2">
+                                                            <button
+                                                                onClick={() => handleToggleLike(comment.commentId, 'LIKE')}
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
+                                                            >
+                                                                <ThumbsUp size={14} />
+                                                                {comment.likeCount || 0}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleToggleLike(comment.commentId, 'DISLIKE')}
+                                                                className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
+                                                            >
+                                                                <ThumbsDown size={14} />
+                                                                {comment.dislikeCount || 0}
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <p className="text-sm">
-                                                        {comment.isSpoiler ? (
-                                                            <span className="text-red-500">[스포일러] </span>
-                                                        ) : null}
-                                                        {comment.content}
-                                                    </p>
-                                                    <div className="flex items-center gap-3 mt-2">
-                                                        <button
-                                                            onClick={() => handleToggleLike(comment.commentId, 'LIKE')}
-                                                            className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
-                                                        >
-                                                            <ThumbsUp size={14} />
-                                                            {comment.likeCount || 0}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleToggleLike(comment.commentId, 'DISLIKE')}
-                                                            className="flex items-center gap-1 text-xs opacity-60 hover:opacity-100"
-                                                        >
-                                                            <ThumbsDown size={14} />
-                                                            {comment.dislikeCount || 0}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
