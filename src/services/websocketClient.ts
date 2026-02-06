@@ -353,7 +353,7 @@ class WebSocketClient {
             return;
         }
 
-        const destination = `/user/queue/kick`;
+        const destination = `/topic/user-kick/${userId}`;
 
         // 이미 구독 중인지 확인
         if (this.subscriptions.has(destination)) {
