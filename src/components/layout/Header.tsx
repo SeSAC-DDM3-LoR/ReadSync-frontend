@@ -35,21 +35,25 @@ const Header: React.FC = () => {
     fetchCartCount();
 
     // [New] 중복 로그인 방지 (Kick 구독)
+    // 2초 딜레이: 새로 로그인한 기기가 자기 자신의 킥 메시지를 받지 않도록
+    let kickTimeout: ReturnType<typeof setTimeout> | undefined;
     if (isAuthenticated && user?.userId) {
       const token = authService.getAccessToken();
       if (token) {
-        console.log('[Header] Connecting to WebSocket for Kick listener...');
-        import('../../services/websocketClient').then(module => {
-          const ws = module.default;
-          ws.connect(token).then(() => {
-            ws.subscribeToKick(user.userId, (message) => {
-              console.warn('🚫 [Auto-Logout] Kick message received:', message);
-              alert(message.message || '다른 기기에서 로그인하여 로그아웃됩니다.');
-              logout();
-              navigate('/login');
+        kickTimeout = setTimeout(() => {
+          console.log('[Header] Connecting to WebSocket for Kick listener (delayed)...');
+          import('../../services/websocketClient').then(module => {
+            const ws = module.default;
+            ws.connect(token).then(() => {
+              ws.subscribeToKick(user.userId, (message) => {
+                console.warn('🚫 [Auto-Logout] Kick message received:', message);
+                alert(message.message || '다른 기기에서 로그인하여 로그아웃됩니다.');
+                logout();
+                navigate('/login');
+              });
             });
           });
-        });
+        }, 2000); // 2초 후에 구독 시작
       }
     }
 
