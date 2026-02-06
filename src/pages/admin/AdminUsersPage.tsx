@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import {
     LayoutDashboard, Users, BookOpen, AlertTriangle,
-    Search, Shield, ChevronLeft, ChevronRight, Loader2, MessageSquareWarning
+    Search, Shield, ChevronLeft, ChevronRight, Loader2, MessageSquareWarning, Tag
 
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
@@ -199,6 +199,7 @@ const AdminSidebar: React.FC<{ active: string }> = ({ active }) => {
         { path: '/admin/dashboard', key: 'dashboard', label: '대시보드', icon: LayoutDashboard },
         { path: '/admin/users', key: 'users', label: '회원 관리', icon: Users },
         { path: '/admin/books', key: 'books', label: '도서 관리', icon: BookOpen },
+        { path: '/admin/categories', key: 'categories', label: '카테고리 관리', icon: Tag },
         { path: '/admin/reports', key: 'reports', label: '회원 신고 관리', icon: AlertTriangle },
         { path: '/admin/content-reports', key: 'content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
         // { path: '/admin/notices', key: 'notices', label: '공지 관리', icon: Bell },
