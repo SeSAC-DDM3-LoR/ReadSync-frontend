@@ -12,12 +12,14 @@ export interface ChapterResponse {
     chapterId: number;
     chapterName: string;
     bookId: number;
-    bookTitle: string;
+    bookTitle?: string;
     sequence: number;
     paragraphs: number;
     isEmbedded: boolean;
+    bookContentPath?: string;  // 파일 저장 경로
+    bookContent?: ChapterContent[];  // 책 내용 (백엔드 필드명)
     fileUrl?: string;    // S3 URL 또는 로컬 파일 URL
-    content?: ChapterContent[];  // 챕터 내용 (getChapter일 때만)
+    content?: ChapterContent[];  // 호환용 (deprecated)
 }
 
 // ==================== Chapter Service ====================

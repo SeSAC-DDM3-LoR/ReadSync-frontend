@@ -89,9 +89,12 @@ const TtsRoomPage: React.FC = () => {
                     console.log(`[TTS] Loading chapter ${currentRoom.currentChapterId}...`);
                     const chapterData = await chapterService.getChapter(currentRoom.currentChapterId);
 
-                    if (chapterData.content && chapterData.content.length > 0) {
+                    // 백엔드는 bookContent 필드로 반환
+                    const contentArray = chapterData.bookContent as ChapterContent[] | undefined;
+
+                    if (contentArray && contentArray.length > 0) {
                         // ChapterContent를 BookParagraph 형식으로 변환
-                        const paragraphs: BookParagraph[] = chapterData.content.map((item: ChapterContent) => ({
+                        const paragraphs: BookParagraph[] = contentArray.map((item: ChapterContent) => ({
                             id: item.id,
                             speaker: item.speaker,
                             text: item.text
