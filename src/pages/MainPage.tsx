@@ -20,22 +20,35 @@ const RecommendedBookCard: React.FC<{
   onClick: () => void;
 }> = ({ book, onClick }) => (
   <motion.div
-    className="w-full bg-white rounded-xl overflow-hidden cursor-pointer border border-emerald-100 shadow-sm hover:shadow-md transition-all relative group"
+    className="w-full aspect-[2/3] rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-lg transition-all relative group"
     onClick={onClick}
     whileHover={{ y: -5 }}
   >
-    <div className="h-48 bg-emerald-50 flex items-center justify-center relative overflow-hidden">
-      {book.coverUrl ? (
-        <img src={book.coverUrl} alt={book.title} className="w-full h-full object-cover" />
-      ) : (
+    {/* Background Image */}
+    {book.coverUrl ? (
+      <img
+        src={book.coverUrl}
+        alt={book.title}
+        className="absolute inset-0 w-full h-full object-cover"
+        referrerPolicy="no-referrer"
+      />
+    ) : (
+      <div className="absolute inset-0 bg-emerald-50 flex items-center justify-center">
         <Book size={48} className="text-emerald-200" />
-      )}
-      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+      </div>
+    )}
+
+    {/* Gradient Overlay for Text Readability - always visible to make text readable */}
+    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+
+    {/* Text Content Overlay */}
+    <div className="absolute bottom-0 left-0 w-full p-4 z-10">
+      <h4 className="font-bold text-white text-sm truncate drop-shadow-md">{book.title}</h4>
+      <p className="text-xs text-gray-200 truncate mt-1 drop-shadow-sm">{book.author}</p>
     </div>
-    <div className="p-3">
-      <h4 className="font-bold text-gray-800 text-sm truncate">{book.title}</h4>
-      <p className="text-xs text-gray-500 truncate mt-1">{book.author}</p>
-    </div>
+
+    {/* Hover Effect */}
+    <div className="absolute inset-0 bg-black/0 group-hover:bg-white/10 transition-colors pointer-events-none" />
   </motion.div>
 );
 
@@ -314,7 +327,7 @@ const RecentBookCard: React.FC<{
     onClick={onClick}
   >
     <div className="book-card-cover relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/20" />
+      {/* <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/20" /> */}
       {coverUrl ? (
         <img
           src={coverUrl}
