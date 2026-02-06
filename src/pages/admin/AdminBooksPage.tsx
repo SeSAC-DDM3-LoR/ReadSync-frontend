@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
-    LayoutDashboard, Users, AlertTriangle, Shield, X, Loader2,
-    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
-    Zap, CheckCircle, Brain, MessageSquareWarning
+    Loader2, Brain, FileText, ChevronUp, ChevronDown, GripVertical, CheckCircle,
+    Zap, X, Save, Upload
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 
+import AdminSidebar from '../../components/layout/AdminSidebar';
+
 import {
-    adminBookService, adminChapterService,
-    type AdminBook, type BookRequest, type AdminChapter
+    adminBookService, adminChapterService, adminCategoryService,
+    type AdminBook, type BookRequest, type AdminChapter, type AdminCategory
 } from '../../services/adminService';
 
 const AdminBooksPage: React.FC = () => {
@@ -20,6 +21,7 @@ const AdminBooksPage: React.FC = () => {
 
     // 도서 목록 상태
     const [books, setBooks] = useState<AdminBook[]>([]);
+    const [categories, setCategories] = useState<AdminCategory[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
@@ -69,7 +71,8 @@ const AdminBooksPage: React.FC = () => {
             return;
         }
         loadBooks();
-    }, [isAuthenticated, user?.role, currentPage]);
+        loadCategories();
+    }, [currentPage, isAuthenticated, user?.role]);
 
     // ==================== Data Loading ====================
 
@@ -83,6 +86,17 @@ const AdminBooksPage: React.FC = () => {
             console.error('Failed to load books:', error);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const loadCategories = async () => {
+        try {
+            // Load all categories (assuming paginated but getting first page big enough or iterating)
+            // For now, getting first 100 which should be enough
+            const response = await adminCategoryService.getAllCategories(0, 100);
+            setCategories(response.content);
+        } catch (error) {
+            console.error('Failed to load categories:', error);
         }
     };
 
@@ -131,10 +145,10 @@ const AdminBooksPage: React.FC = () => {
                 coverUrl: book.coverUrl || '',
                 summary: book.summary || '',
                 categoryId: book.categoryId || 1,
-                isAdultOnly: false,
-                viewPermission: 'FREE', // 기본값
-                language: 'ko',
-                publishedDate: '',
+                isAdultOnly: book.isAdultOnly || false,
+                viewPermission: book.viewPermission || 'FREE',
+                language: book.language || 'ko',
+                publishedDate: book.publishedDate ? new Date(book.publishedDate).toISOString().split('T')[0] : '',
             });
         } else {
             setEditingBook(null);
@@ -146,7 +160,7 @@ const AdminBooksPage: React.FC = () => {
                 rentalPrice: 0,
                 coverUrl: '',
                 summary: '',
-                categoryId: 1,
+                categoryId: categories.length > 0 ? categories[0].categoryId : 1,
                 isAdultOnly: false,
                 viewPermission: 'FREE',
                 language: 'ko',
@@ -328,7 +342,7 @@ const AdminBooksPage: React.FC = () => {
                     chapterFile || undefined,
                     chapterForm.chapterName,
                     chapterForm.sequence,
-                    chapterForm.paragraphs // [NEW]
+                    chapterForm.paragraphs
                 );
                 savedChapterId = updated?.chapterId || editingChapter.chapterId;
                 alert('챕터가 수정되었습니다.');
@@ -338,18 +352,16 @@ const AdminBooksPage: React.FC = () => {
                     expandedBookId,
                     chapterForm.chapterName,
                     chapterForm.sequence,
-                    chapterForm.paragraphs // [NEW]
+                    chapterForm.paragraphs
                 );
-                savedChapterId = created?.chapterId; // Assuming createChapter returns proper object. AdminService types might need checking.
-                // adminService says Promise<any>. I should assume it returns the DTO.
+                savedChapterId = created?.chapterId;
                 alert('챕터가 등록되었습니다.');
             }
 
-            // [NEW] 자동 임베딩 처리
+            // 자동 임베딩 처리
             if (savedChapterId && chapterForm.autoEmbed) {
                 try {
                     await adminChapterService.embedChapter(savedChapterId);
-                    // alert('자동 임베딩 요청이 시작되었습니다.'); // 너무 시끄러울 수 있으니 토스트나 조용한 로그로? 일단 요구사항대로 알림.
                     console.log('Auto embedding triggered for', savedChapterId);
                 } catch (e) {
                     console.error('Auto embedding failed', e);
@@ -369,7 +381,7 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
-    // [NEW] 임베딩 상태 조회
+    // 임베딩 상태 조회
     const handleCheckEmbedding = async (chapterId: number) => {
         try {
             const status = await adminChapterService.getRagStatus(chapterId);
@@ -380,7 +392,7 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
-    // [NEW] 수동 임베딩 요청
+    // 수동 임베딩 요청
     const handleEmbedChapter = async (chapterId: number) => {
         if (!confirm('임베딩을 시작하시겠습니까? 기존 데이터가 있으면 덮어씌워집니다.')) return;
         try {
@@ -409,58 +421,13 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
-    // 사이드바 메뉴 아이템
-    const menuItems = [
-        { path: '/admin/dashboard', label: '대시보드', icon: LayoutDashboard },
-        { path: '/admin/users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', label: '도서 관리', icon: BookOpen, active: true },
-        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
-        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
-        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
-    ];
+
+
 
     return (
         <div className="min-h-screen bg-gray-900">
             {/* 사이드바 */}
-            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
-                        <Shield size={24} className="text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-white font-bold text-lg">ReadSync</h1>
-                        <p className="text-gray-400 text-xs">Admin Panel</p>
-                    </div>
-                </div>
-
-                <nav className="space-y-2">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${item.active
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                                    }`}
-                            >
-                                <Icon size={20} />
-                                <span className="font-medium">{item.label}</span>
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                <div className="absolute bottom-6 left-6 right-6">
-                    <Link
-                        to="/"
-                        className="block text-center py-3 text-gray-400 hover:text-white transition-colors"
-                    >
-                        ← 사이트로 돌아가기
-                    </Link>
-                </div>
-            </aside>
+            <AdminSidebar activePath="/admin/books" />
 
             {/* 메인 콘텐츠 */}
             <main className="ml-64 p-8">
@@ -635,7 +602,7 @@ const AdminBooksPage: React.FC = () => {
                                                                 <span className="text-gray-500 text-sm">
                                                                     {chapter.paragraphs || 0} 단락
                                                                 </span>
-                                                                {/* [NEW] 임베딩 상태 */}
+                                                                {/* 임베딩 상태 */}
                                                                 <div className="flex items-center gap-1 mx-2">
                                                                     {chapter.isEmbedded ? (
                                                                         <button
@@ -817,8 +784,7 @@ const AdminBooksPage: React.FC = () => {
                                     <textarea
                                         value={bookForm.summary || ''}
                                         onChange={(e) => setBookForm({ ...bookForm, summary: e.target.value })}
-                                        rows={3}
-                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none resize-none"
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none h-32 resize-none"
                                     />
                                 </div>
 
@@ -854,9 +820,23 @@ const AdminBooksPage: React.FC = () => {
                                         className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
                                     />
                                 </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">카테고리</label>
+                                    <select
+                                        value={bookForm.categoryId}
+                                        onChange={(e) => setBookForm({ ...bookForm, categoryId: Number(e.target.value) })}
+                                        className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                                    >
+                                        {categories.map((cat) => (
+                                            <option key={cat.categoryId} value={cat.categoryId}>
+                                                {cat.categoryName}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
 
-                            <div className="flex gap-3 mt-6">
+                            <div className="flex justify-end gap-2 mt-6">
                                 <button
                                     onClick={() => setShowBookModal(false)}
                                     className="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl hover:bg-gray-600 transition-colors"

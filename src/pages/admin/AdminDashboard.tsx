@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle,
-    TrendingUp, ArrowUpRight, Loader2, Shield, MessageSquareWarning
+    TrendingUp, ArrowUpRight, Loader2, Users, BookOpen, Tag, AlertTriangle
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { adminUserService, adminReportService, adminBookService } from '../../services/adminService';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminDashboard: React.FC = () => {
     const navigate = useNavigate();
@@ -64,69 +64,12 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const menuItems = [
-        { path: '/admin/users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
-        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
-        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
-    ];
+
 
     return (
         <div className="min-h-screen bg-gray-900">
             {/* 사이드바 */}
-            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
-                        <Shield size={24} className="text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-white font-bold text-lg">ReadSync</h1>
-                        <p className="text-gray-400 text-xs">Admin Panel</p>
-                    </div>
-                </div>
-
-                <nav className="space-y-2">
-                    <Link
-                        to="/admin/dashboard"
-                        className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/20 text-emerald-400"
-                    >
-                        <LayoutDashboard size={20} />
-                        <span className="font-medium">대시보드</span>
-                    </Link>
-
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className="flex items-center justify-between px-4 py-3 rounded-xl text-gray-400 hover:bg-gray-700 hover:text-white transition-colors"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <Icon size={20} />
-                                    <span className="font-medium">{item.label}</span>
-                                </div>
-                                {/* {item.count !== undefined && (
-                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${item.highlight ? 'bg-red-500 text-white' : 'bg-gray-600 text-gray-300'
-                                        }`}>
-                                        {item.count}
-                                    </span>
-                                )} */}
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                <div className="absolute bottom-6 left-6 right-6">
-                    <Link
-                        to="/"
-                        className="block text-center py-3 text-gray-400 hover:text-white transition-colors"
-                    >
-                        ← 사이트로 돌아가기
-                    </Link>
-                </div>
-            </aside>
+            <AdminSidebar activePath="/admin/dashboard" />
 
             {/* 메인 콘텐츠 */}
             <main className="ml-64 p-8">
@@ -184,6 +127,12 @@ const AdminDashboard: React.FC = () => {
                                 link="/admin/reports"
                                 icon={<AlertTriangle size={24} />}
                                 highlight={stats.pendingReports > 0}
+                            />
+                            <QuickLinkCard
+                                title="카테고리 관리"
+                                description="도서 카테고리 설정"
+                                link="/admin/categories"
+                                icon={<Tag size={24} />}
                             />
                         </div>
                     </>

@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle,
-    Search, Shield, ChevronLeft, ChevronRight, Loader2, MessageSquareWarning
-
+    Search, ChevronLeft, ChevronRight, Loader2
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { adminUserService } from '../../services/adminService';
 import type { AdminUser } from '../../services/adminService';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminUsersPage: React.FC = () => {
     const navigate = useNavigate();
@@ -82,7 +81,7 @@ const AdminUsersPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-900">
             {/* 사이드바 */}
-            <AdminSidebar active="users" />
+            <AdminSidebar activePath="/admin/users" />
 
             {/* 메인 콘텐츠 */}
             <main className="ml-64 p-8">
@@ -193,57 +192,5 @@ const AdminUsersPage: React.FC = () => {
     );
 };
 
-// 재사용 사이드바 컴포넌트
-const AdminSidebar: React.FC<{ active: string }> = ({ active }) => {
-    const menuItems = [
-        { path: '/admin/dashboard', key: 'dashboard', label: '대시보드', icon: LayoutDashboard },
-        { path: '/admin/users', key: 'users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', key: 'books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/reports', key: 'reports', label: '회원 신고 관리', icon: AlertTriangle },
-        { path: '/admin/content-reports', key: 'content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
-        // { path: '/admin/notices', key: 'notices', label: '공지 관리', icon: Bell },
-    ];
-
-    return (
-        <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
-            <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
-                    <Shield size={24} className="text-white" />
-                </div>
-                <div>
-                    <h1 className="text-white font-bold text-lg">ReadSync</h1>
-                    <p className="text-gray-400 text-xs">Admin Panel</p>
-                </div>
-            </div>
-
-            <nav className="space-y-2">
-                {menuItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = active === item.key;
-                    return (
-                        <Link
-                            key={item.path}
-                            to={item.path}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl ${isActive
-                                ? 'bg-emerald-500/20 text-emerald-400'
-                                : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                                } transition-colors`}
-                        >
-                            <Icon size={20} />
-                            <span className="font-medium">{item.label}</span>
-                        </Link>
-                    );
-                })}
-            </nav>
-
-            <div className="absolute bottom-6 left-6 right-6">
-                <Link to="/" className="block text-center py-3 text-gray-400 hover:text-white transition-colors">
-                    ← 사이트로 돌아가기
-                </Link>
-            </div>
-        </aside>
-    );
-};
-
-export { AdminSidebar };
+// [Removed internal AdminSidebar]
 export default AdminUsersPage;

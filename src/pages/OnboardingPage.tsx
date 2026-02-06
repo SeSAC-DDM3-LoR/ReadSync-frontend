@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -8,10 +8,30 @@ import {
 import authService from '../services/authService';
 import useAuthStore from '../stores/authStore';
 
-import { GENRES } from '../constants/genres';
+import { adminCategoryService } from '../services/adminService';
+import {
+    Wand2, Skull, Heart, Rocket,
+    Briefcase, Leaf, History, Music
+} from 'lucide-react';
 
-// 장르 목록 (Shared Constant 사용)
-const genres = GENRES;
+const GENRE_ICONS = [Wand2, Heart, Skull, Rocket, Briefcase, Leaf, History, Music];
+const GENRE_COLORS = [
+    'from-purple-500 to-indigo-500',
+    'from-pink-500 to-rose-500',
+    'from-gray-700 to-gray-900',
+    'from-cyan-500 to-blue-500',
+    'from-amber-500 to-orange-500',
+    'from-emerald-500 to-green-500',
+    'from-yellow-600 to-amber-700',
+    'from-teal-500 to-cyan-500'
+];
+
+interface UIGenre {
+    id: string; // categoryName as ID for preference
+    label: string;
+    icon: any;
+    color: string;
+}
 
 const OnboardingPage: React.FC = () => {
     const navigate = useNavigate();
@@ -22,6 +42,33 @@ const OnboardingPage: React.FC = () => {
     const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const [genres, setGenres] = useState<UIGenre[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        loadCategories();
+    }, []);
+
+    const loadCategories = async () => {
+        setIsLoading(true);
+        try {
+            const response = await adminCategoryService.getAllCategories(0, 100);
+            console.log('Fetched categories for onboarding:', response.content);
+            const mappedGenres = response.content.map((cat, index) => ({
+                id: cat.categoryName, // Use name as ID for preference matching
+                label: cat.categoryName,
+                icon: GENRE_ICONS[index % GENRE_ICONS.length],
+                color: GENRE_COLORS[index % GENRE_COLORS.length]
+            }));
+            setGenres(mappedGenres);
+        } catch (error) {
+            console.error('Failed to load categories:', error);
+            setError('카테고리 정보를 불러오는데 실패했습니다.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const toggleGenre = (genreId: string) => {
         if (selectedGenres.includes(genreId)) {
@@ -169,33 +216,44 @@ const OnboardingPage: React.FC = () => {
                                 </p>
 
                                 <div className="grid grid-cols-2 gap-3">
-                                    {genres.map((genre) => {
-                                        const isSelected = selectedGenres.includes(genre.id);
-                                        const Icon = genre.icon;
-                                        return (
-                                            <motion.button
-                                                key={genre.id}
-                                                onClick={() => toggleGenre(genre.id)}
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                className={`relative p-4 rounded-xl border-2 transition-all text-left ${isSelected
-                                                    ? 'border-emerald-500 bg-emerald-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                                    }`}
-                                            >
-                                                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${genre.color} flex items-center justify-center mb-2`}>
-                                                    <Icon size={20} className="text-white" />
-                                                </div>
-                                                <span className="font-bold text-gray-800">{genre.label}</span>
-
-                                                {isSelected && (
-                                                    <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
-                                                        <Check size={14} className="text-white" />
+                                    {isLoading ? (
+                                        <div className="col-span-2 py-8 text-center text-gray-500">
+                                            카테고리를 불러오는 중입니다...
+                                        </div>
+                                    ) : genres.length === 0 ? (
+                                        <div className="col-span-2 py-8 text-center text-gray-500">
+                                            등록된 카테고리가 없습니다.<br />
+                                            관리자에게 문의해주세요.
+                                        </div>
+                                    ) : (
+                                        genres.map((genre) => {
+                                            const isSelected = selectedGenres.includes(genre.id);
+                                            const Icon = genre.icon;
+                                            return (
+                                                <motion.button
+                                                    key={genre.id}
+                                                    onClick={() => toggleGenre(genre.id)}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    className={`relative p-4 rounded-xl border-2 transition-all text-left ${isSelected
+                                                        ? 'border-emerald-500 bg-emerald-50'
+                                                        : 'border-gray-200 hover:border-gray-300'
+                                                        }`}
+                                                >
+                                                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${genre.color} flex items-center justify-center mb-2`}>
+                                                        <Icon size={20} className="text-white" />
                                                     </div>
-                                                )}
-                                            </motion.button>
-                                        );
-                                    })}
+                                                    <span className="font-bold text-gray-800">{genre.label}</span>
+
+                                                    {isSelected && (
+                                                        <div className="absolute top-2 right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center">
+                                                            <Check size={14} className="text-white" />
+                                                        </div>
+                                                    )}
+                                                </motion.button>
+                                            );
+                                        })
+                                    )}
                                 </div>
 
                                 <p className="text-sm text-gray-400 mt-3 text-center">

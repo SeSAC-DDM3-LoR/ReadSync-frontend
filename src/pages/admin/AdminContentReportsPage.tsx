@@ -13,7 +13,7 @@ import type {
     ContentReportProcessStatus,
     ContentReportTargetType
 } from '../../services/adminContentReportService';
-import { AdminSidebar } from './AdminUsersPage';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminContentReportsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -125,7 +125,7 @@ const AdminContentReportsPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-900">
-            <AdminSidebar active="content-reports" />
+            <AdminSidebar activePath="/admin/content-reports" />
 
             <main className="ml-64 p-8">
                 <div className="flex items-center justify-between mb-8">
