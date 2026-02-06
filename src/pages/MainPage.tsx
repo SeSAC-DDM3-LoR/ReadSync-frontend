@@ -38,8 +38,8 @@ const RecommendedBookCard: React.FC<{
       </div>
     )}
 
-    {/* Gradient Overlay for Text Readability - always visible to make text readable */}
-    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+    {/* Gradient Overlay for Text Readability - localized to bottom */}
+    <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
 
     {/* Text Content Overlay */}
     <div className="absolute bottom-0 left-0 w-full p-4 z-10">

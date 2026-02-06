@@ -70,6 +70,10 @@ export interface AdminBook {
     summary: string | null;
     categoryId: number;
     categoryName?: string;
+    isAdultOnly?: boolean;
+    viewPermission?: 'FREE' | 'PREMIUM';
+    language?: string;
+    publishedDate?: string;
     createdAt: string;
 }
 
@@ -109,6 +113,17 @@ export interface ChapterRequest {
     bookId: number;
     chapterName?: string;
     sequence?: number;
+}
+
+export interface AdminCategory {
+    categoryId: number;
+    categoryName: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CategoryRequest {
+    categoryName: string;
 }
 
 // ==================== Admin User Service ====================
@@ -324,6 +339,42 @@ export const adminChapterService = {
     getRagStatus: async (chapterId: number): Promise<RagStatus> => {
         const response = await api.get<RagStatus>(`/v1/chapters/${chapterId}/rag-status`);
         return response.data;
+    },
+
+};
+
+// ==================== Admin Category Service ====================
+
+export const adminCategoryService = {
+    // 카테고리 목록 조회
+    getAllCategories: async (page = 0, size = 20): Promise<PageResponse<AdminCategory>> => {
+        const response = await api.get<PageResponse<AdminCategory>>('/v1/categories', {
+            params: { page, size },
+        });
+        return response.data;
+    },
+
+    // 카테고리 단건 조회
+    getCategory: async (categoryId: number): Promise<AdminCategory> => {
+        const response = await api.get<AdminCategory>(`/v1/categories/${categoryId}`);
+        return response.data;
+    },
+
+    // 카테고리 등록
+    createCategory: async (categoryName: string): Promise<number> => {
+        const response = await api.post<number>('/v1/categories', { categoryName });
+        return response.data;
+    },
+
+    // 카테고리 수정
+    updateCategory: async (categoryId: number, categoryName: string): Promise<string> => {
+        const response = await api.put<string>(`/v1/categories/${categoryId}`, { categoryName });
+        return response.data;
+    },
+
+    // 카테고리 삭제
+    deleteCategory: async (categoryId: number): Promise<void> => {
+        await api.delete(`/v1/categories/${categoryId}`);
     },
 };
 

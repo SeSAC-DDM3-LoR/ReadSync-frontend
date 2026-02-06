@@ -32,6 +32,7 @@ import AdminReportsPage from './pages/admin/AdminReportsPage';
 import AdminContentReportsPage from './pages/admin/AdminContentReportsPage';
 import AdminNoticesPage from './pages/admin/AdminNoticesPage';
 import AdminBooksPage from './pages/admin/AdminBooksPage';
+import AdminCategoriesPage from './pages/admin/AdminCategoriesPage';
 
 function App() {
   return (
@@ -96,6 +97,7 @@ function App() {
         <Route path="/admin/books" element={<AdminBooksPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
         <Route path="/admin/content-reports" element={<AdminContentReportsPage />} />
+        <Route path="/admin/categories" element={<AdminCategoriesPage />} />
         <Route path="/admin/notices" element={<AdminNoticesPage />} />
       </Routes>
     </Router>
