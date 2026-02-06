@@ -209,20 +209,40 @@ const TtsRoomPage: React.FC = () => {
                 if (message.type === 'PLAY_AUDIO') {
                     console.log('🔊 [WebSocket] PLAY_AUDIO received:', message);
                     const audioUrl = message.audioUrl;
-                    const paragraphId = message.paragraphId; // 현재 재생 중인 문단 ID
-
-                    // 활성 문단 ID 업데이트 (오디오 종료 시 다음 문단으로 넘어가기 위해 필요)
-                    if (paragraphId) {
-                        setActiveParagraphId(paragraphId);
-                    }
+                    const paragraphId = message.paragraphId;
 
                     if (audioUrl && audioRef.current) {
+                        const currentAudio = audioRef.current;
+
+                        // [중요] 같은 문단을 다시 재생하는 경우 (예: 목소리/속도 변경)
+                        // 현재 재생 시간을 저장해두었다가 복원합니다.
+                        let resumeTime = 0;
+                        if (paragraphId === activeParagraphId) {
+                            resumeTime = currentAudio.currentTime;
+                            console.log(`⏱️ Resuming paragraph ${paragraphId} from ${resumeTime.toFixed(2)}s`);
+                        }
+
+                        // 활성 문단 ID 업데이트
+                        if (paragraphId) setActiveParagraphId(paragraphId);
+
                         setIsAudioLoading(false);
-                        audioRef.current.src = audioUrl;
-                        audioRef.current.load();
-                        audioRef.current.play().catch((err) => {
-                            console.error('Audio play failed:', err);
-                        });
+                        currentAudio.src = audioUrl;
+                        currentAudio.load();
+
+                        // 메타데이터 로드 완료 후 시간 복원 및 재생
+                        currentAudio.onloadedmetadata = () => {
+                            if (Number.isFinite(resumeTime) && resumeTime > 0) {
+                                currentAudio.currentTime = resumeTime;
+                            }
+
+                            // 재생 속도 적용 (현재 설정된 속도 유지)
+                            if (currentRoom?.playSpeed) {
+                                currentAudio.playbackRate = currentRoom.playSpeed;
+                            }
+
+                            currentAudio.play().catch((err) => console.error('Audio play failed:', err));
+                        };
+
                         setIsPlaying(true);
                     }
                 }
@@ -283,6 +303,14 @@ const TtsRoomPage: React.FC = () => {
             }
         };
     }, [currentRoomId, currentView, refreshParticipants]); // refreshParticipants 의존성 추가
+
+    // [New] 재생 속도 변경 감지 및 적용
+    useEffect(() => {
+        if (audioRef.current && currentRoom?.playSpeed) {
+            audioRef.current.playbackRate = currentRoom.playSpeed;
+            console.log(`⏩ Playback rate updated to ${currentRoom.playSpeed}x`);
+        }
+    }, [currentRoom?.playSpeed]);
 
 
     // ---------------- Handlers ----------------
