@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
-    Loader2, X, Tag
+    Plus, Edit3, Trash2,
+    Loader2, X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from '../../stores/authStore';
@@ -16,8 +16,8 @@ const AdminCategoriesPage: React.FC = () => {
     // Data State
     const [categories, setCategories] = useState<AdminCategory[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [currentPage, setCurrentPage] = useState(0);
-    const [totalPages, setTotalPages] = useState(0);
+    const [currentPage] = useState(0);
+
 
     // Modal State
     const [showModal, setShowModal] = useState(false);
@@ -40,7 +40,6 @@ const AdminCategoriesPage: React.FC = () => {
         try {
             const response = await adminCategoryService.getAllCategories(currentPage, 20);
             setCategories(response.content);
-            setTotalPages(response.totalPages);
         } catch (error) {
             console.error('Failed to load categories:', error);
         } finally {
@@ -97,13 +96,7 @@ const AdminCategoriesPage: React.FC = () => {
     };
 
     // Sidebar Menu
-    const menuItems = [
-        { path: '/admin/dashboard', label: '대시보드', icon: LayoutDashboard },
-        { path: '/admin/users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/categories', label: '카테고리 관리', icon: Tag, active: true },
-        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle },
-    ];
+
 
     return (
         <div className="min-h-screen bg-gray-900">

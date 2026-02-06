@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
     Loader2, Brain, FileText, ChevronUp, ChevronDown, GripVertical, CheckCircle,
-    Zap, X, Save, Upload, MessageSquareWarning, AlertTriangle
+    Zap, X, Save, Upload
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 

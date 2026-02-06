@@ -8,7 +8,7 @@ import {
 import authService from '../services/authService';
 import useAuthStore from '../stores/authStore';
 
-import { adminCategoryService, type AdminCategory } from '../services/adminService';
+import { adminCategoryService } from '../services/adminService';
 import {
     Wand2, Skull, Heart, Rocket,
     Briefcase, Leaf, History, Music

@@ -36,11 +36,11 @@ const Header: React.FC = () => {
 
     // [New] 중복 로그인 방지 (Kick 구독)
     // 2초 딜레이: 새로 로그인한 기기가 자기 자신의 킥 메시지를 받지 않도록
-    let kickTimeout: ReturnType<typeof setTimeout> | undefined;
+
     if (isAuthenticated && user?.userId) {
       const token = authService.getAccessToken();
       if (token) {
-        kickTimeout = setTimeout(() => {
+        setTimeout(() => {
           console.log('[Header] Connecting to WebSocket for Kick listener (delayed)...');
           import('../../services/websocketClient').then(module => {
             const ws = module.default;

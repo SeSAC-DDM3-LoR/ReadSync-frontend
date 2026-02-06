@@ -1,10 +1,10 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
     LayoutDashboard, Users, BookOpen, AlertTriangle,
     Shield, MessageSquareWarning, Tag, Bell
 } from 'lucide-react';
-import useAuthStore from '../../stores/authStore';
+
 
 interface AdminSidebarProps {
     activePath?: string;

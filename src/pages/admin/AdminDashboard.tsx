@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-    TrendingUp, ArrowUpRight, Loader2, Users, BookOpen, Tag, AlertTriangle, MessageSquareWarning
+    TrendingUp, ArrowUpRight, Loader2, Users, BookOpen, Tag, AlertTriangle
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { adminUserService, adminReportService, adminBookService } from '../../services/adminService';
@@ -64,14 +64,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const menuItems = [
-        { path: '/admin/users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', label: '도서 관리', icon: BookOpen },
-        { path: '/admin/categories', label: '카테고리 관리', icon: Tag },
-        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
-        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
-        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
-    ];
+
 
     return (
         <div className="min-h-screen bg-gray-900">
