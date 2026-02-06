@@ -7,7 +7,6 @@ import useAuthStore from '../../stores/authStore';
 import { readingRoomService, type ReadingRoom, type RoomParticipant } from '../../services/readingRoomService';
 import { chatService, type ChatMessage } from '../../services/chatService';
 import websocketClient from '../../services/websocketClient';
-import { ttsService } from '../../services/ttsService';
 import { chapterService, type ChapterContent } from '../../services/chapterService';
 
 // Sub Components
@@ -263,32 +262,13 @@ const TtsRoomPage: React.FC = () => {
                 }
 
                 // C. 문단 싱크 (방장이 문단을 바꿨을 때)
+                // 주의: 실제 오디오 재생은 백엔드에서 PLAY_AUDIO 메시지로 받아서 처리함.
+                // 여기서는 UI 상태만 업데이트하고 오디오 요청은 하지 않음 (중복 방지).
                 if (message.type === 'SYNC_PARAGRAPH') {
                     const targetId = message.paragraphId;
+                    console.log('📌 [WebSocket] SYNC_PARAGRAPH received:', targetId);
                     setActiveParagraphId(targetId);
-
-                    if (targetId) {
-                        try {
-                            setIsAudioLoading(true);
-                            // 1. 오디오 URL 가져오기 (voiceType 전달)
-                            const voiceType = currentRoom?.voiceType || 'SEONBI';
-                            const url = await ttsService.getAudioUrl(targetId, voiceType);
-
-                            // 2. 오디오 설정 및 재생
-                            if (audioRef.current) {
-                                audioRef.current.src = url;
-                                // 현재 방 상태가 PLAYING이라면 소리도 같이 재생
-                                // (방금 입장했거나, 방장이 이미 재생 중인 경우)
-                                if (isPlaying || message.forcePlay) {
-                                    await audioRef.current.play();
-                                }
-                            }
-                        } catch (err) {
-                            console.error("Audio Sync Failed:", err);
-                        } finally {
-                            setIsAudioLoading(false);
-                        }
-                    }
+                    setIsAudioLoading(true); // 로딩 표시 (PLAY_AUDIO 대기)
                 }
             });
         };
