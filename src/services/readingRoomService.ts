@@ -82,19 +82,19 @@ export const readingRoomService = {
 
     // 독서 시작 (방장 전용)
     startReading: async (roomId: number) => {
-        const response = await api.patch(`/v1/reading-rooms/${roomId}/start`);
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/start`, {});
         return response.data;
     },
 
     // 독서 일시정지/재개 (방장 전용)
     pauseReading: async (roomId: number) => {
-        const response = await api.patch(`/v1/reading-rooms/${roomId}/pause`);
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/pause`, {});
         return response.data;
     },
 
     // 독서 종료 (방장 전용)
     finishReading: async (roomId: number): Promise<void> => {
-        await api.patch(`/v1/reading-rooms/${roomId}/finish`);
+        await api.patch(`/v1/reading-rooms/${roomId}/finish`, {});
     },
 
     // 방 목록 조회
