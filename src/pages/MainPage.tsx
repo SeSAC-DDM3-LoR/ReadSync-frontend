@@ -302,8 +302,9 @@ const RecentBookCard: React.FC<{
   index: number;
   title: string;
   author: string;
+  coverUrl?: string; // [New]
   onClick: () => void;
-}> = ({ index, title, author, onClick }) => (
+}> = ({ index, title, author, coverUrl, onClick }) => (
   <motion.div
     className="book-card cursor-pointer"
     initial={{ opacity: 0, y: 20 }}
@@ -312,11 +313,20 @@ const RecentBookCard: React.FC<{
     whileHover={{ scale: 1.03 }}
     onClick={onClick}
   >
-    <div className="book-card-cover relative">
+    <div className="book-card-cover relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-green-500/20" />
-      <div className="w-full h-full flex items-center justify-center">
-        <Book size={40} className="text-emerald-300 drop-shadow" />
-      </div>
+      {coverUrl ? (
+        <img
+          src={coverUrl}
+          alt={title}
+          className="w-full h-full object-cover"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center">
+          <Book size={40} className="text-emerald-300 drop-shadow" />
+        </div>
+      )}
     </div>
     <div className="mt-3 px-1">
       <h4 className="font-bold text-gray-800 text-sm truncate group-hover:text-emerald-700 transition-colors">
@@ -768,6 +778,7 @@ const MainPage: React.FC = () => {
                   index={idx}
                   title={book.title}
                   author={book.author}
+                  coverUrl={book.coverUrl}
                   onClick={() => navigate(`/books/${book.bookId}`)}
                 />
               ))
