@@ -29,6 +29,7 @@ import SubscriptionStorePage from './pages/SubscriptionStorePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsersPage from './pages/admin/AdminUsersPage';
 import AdminReportsPage from './pages/admin/AdminReportsPage';
+import AdminContentReportsPage from './pages/admin/AdminContentReportsPage';
 import AdminNoticesPage from './pages/admin/AdminNoticesPage';
 import AdminBooksPage from './pages/admin/AdminBooksPage';
 
@@ -94,6 +95,7 @@ function App() {
         <Route path="/admin/users" element={<AdminUsersPage />} />
         <Route path="/admin/books" element={<AdminBooksPage />} />
         <Route path="/admin/reports" element={<AdminReportsPage />} />
+        <Route path="/admin/content-reports" element={<AdminContentReportsPage />} />
         <Route path="/admin/notices" element={<AdminNoticesPage />} />
       </Routes>
     </Router>

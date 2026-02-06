@@ -4,9 +4,10 @@ import api from './api';
 
 export interface ReportRequest {
     targetUserId?: number;
-    targetContentId?: number;
-    contentType?: 'POST' | 'COMMENT' | 'REVIEW';
-    reason: string;
+    targetId?: number;  // 신고 대상 ID (댓글 ID 또는 리뷰 ID)
+    targetType?: 'CHAPTERS_COMMENT' | 'REVIEW';  // 백엔드 enum과 일치
+    reasonType?: 'BAD_LANGUAGE' | 'SPOILER' | 'ADVERTISEMENT' | 'OTHER';  // 신고 사유 유형
+    reasonDetail: string;  // 상세 사유
 }
 
 // ==================== Report Service ====================
@@ -14,22 +15,24 @@ export interface ReportRequest {
 export const reportService = {
     // 사용자 신고
     reportUser: async (targetUserId: number, reason: string): Promise<void> => {
-        await api.post('/v1/reports/user', {
+        await api.post('/v1/contentreports/user', {
             targetUserId,
             reason
         });
     },
 
-    // 콘텐츠 신고
+    // 콘텐츠 신고 (댓글/리뷰)
     reportContent: async (
-        targetContentId: number,
-        contentType: 'POST' | 'COMMENT' | 'REVIEW',
-        reason: string
+        targetId: number,
+        targetType: 'CHAPTERS_COMMENT' | 'REVIEW',
+        reasonType: 'SPOILER' | 'ABUSE' | 'ADVERTISEMENT',
+        reasonDetail: string
     ): Promise<void> => {
-        await api.post('/v1/reports/content', {
-            targetContentId,
-            contentType,
-            reason
+        await api.post('/v1/contentreports', {
+            targetId,
+            targetType,
+            reasonType,
+            reasonDetail
         });
     },
 };
