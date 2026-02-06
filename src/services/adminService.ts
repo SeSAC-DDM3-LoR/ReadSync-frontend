@@ -150,6 +150,12 @@ export const adminUserService = {
         });
         return response.data;
     },
+
+    // 관리자 생성
+    createAdmin: async (data: any): Promise<any> => {
+        const response = await api.post('/v1/auth/admin/signup', data);
+        return response.data;
+    },
 };
 
 // ==================== Admin Report Service ====================

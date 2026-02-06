@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
-    Search, ChevronLeft, ChevronRight, Loader2
+    Search, ChevronLeft, ChevronRight, Loader2, UserPlus, X
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
 import { adminUserService } from '../../services/adminService';
@@ -18,6 +18,7 @@ const AdminUsersPage: React.FC = () => {
     const [currentPage, setCurrentPage] = useState(0);
     const [totalPages, setTotalPages] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
+    const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     useEffect(() => {
         const isAdmin = user?.role === 'ADMIN' || user?.role === 'ROLE_ADMIN';
@@ -90,6 +91,14 @@ const AdminUsersPage: React.FC = () => {
                         <h1 className="text-3xl font-bold text-white mb-2">회원 관리</h1>
                         <p className="text-gray-400">전체 회원 목록을 관리합니다.</p>
                     </div>
+
+                    <button
+                        onClick={() => setIsCreateModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition-colors font-medium shadow-lg shadow-emerald-900/20"
+                    >
+                        <UserPlus size={20} />
+                        관리자 추가
+                    </button>
                 </div>
 
                 {/* 검색 */}
@@ -188,9 +197,141 @@ const AdminUsersPage: React.FC = () => {
                     </>
                 )}
             </main>
+
+            {/* 모달 */}
+            {isCreateModalOpen && (
+                <CreateAdminModal
+                    onClose={() => setIsCreateModalOpen(false)}
+                    onSuccess={() => {
+                        loadUsers();
+                    }}
+                />
+            )}
         </div>
     );
 };
 
 // [Removed internal AdminSidebar]
+const CreateAdminModal: React.FC<{
+    onClose: () => void;
+    onSuccess: () => void;
+}> = ({ onClose, onSuccess }) => {
+    const [formData, setFormData] = useState({
+        loginId: '',
+        password: '',
+        checkPassword: '',
+        nickname: ''
+    });
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (formData.password !== formData.checkPassword) {
+            alert('비밀번호가 일치하지 않습니다.');
+            return;
+        }
+
+        if (formData.password.length < 4) {
+            alert('비밀번호는 4자 이상이어야 합니다.');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            await adminUserService.createAdmin({
+                loginId: formData.loginId,
+                password: formData.password,
+                nickname: formData.nickname
+            });
+            alert('관리자 계정이 생성되었습니다.');
+            onSuccess();
+            onClose();
+        } catch (error: any) {
+            console.error('Failed to create admin:', error);
+            alert(error.response?.data?.message || '관리자 계정 생성에 실패했습니다.');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-gray-800 rounded-2xl w-full max-w-md border border-gray-700 overflow-hidden shadow-2xl">
+                <div className="flex items-center justify-between p-6 border-b border-gray-700">
+                    <h3 className="text-xl font-bold text-white">관리자 추가</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-white transition-colors">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">아이디</label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.loginId}
+                            onChange={e => setFormData({ ...formData, loginId: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                            placeholder="사용할 아이디"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">닉네임</label>
+                        <input
+                            type="text"
+                            required
+                            value={formData.nickname}
+                            onChange={e => setFormData({ ...formData, nickname: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                            placeholder="관리자 닉네임"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">비밀번호</label>
+                        <input
+                            type="password"
+                            required
+                            value={formData.password}
+                            onChange={e => setFormData({ ...formData, password: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                            placeholder="비밀번호 (4자 이상)"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-gray-400 mb-1">비밀번호 확인</label>
+                        <input
+                            type="password"
+                            required
+                            value={formData.checkPassword}
+                            onChange={e => setFormData({ ...formData, checkPassword: e.target.value })}
+                            className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-xl text-white focus:border-emerald-500 focus:outline-none"
+                            placeholder="비밀번호 확인"
+                        />
+                    </div>
+
+                    <div className="flex gap-3 mt-6">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="flex-1 py-3 bg-gray-700 text-gray-300 rounded-xl hover:bg-gray-600 transition-colors font-medium"
+                        >
+                            취소
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="flex-1 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-500 transition-colors font-bold disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                        >
+                            {isLoading && <Loader2 size={18} className="animate-spin" />}
+                            {isLoading ? '생성 중...' : '생성하기'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 export default AdminUsersPage;
