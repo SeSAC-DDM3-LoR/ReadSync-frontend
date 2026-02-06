@@ -40,7 +40,7 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
     const [selectedBook, setSelectedBook] = useState<Library | null>(null);
     const [selectedVoice, setSelectedVoice] = useState<VoiceType>('SEONBI');
     const [selectedSpeed, setSelectedSpeed] = useState(1.0);
-    const [maxParticipants, setMaxParticipants] = useState(5);
+    const [maxParticipants, setMaxParticipants] = useState(8);
 
     const [myBooks, setMyBooks] = useState<Library[]>([]);
     const [isLoadingBooks, setIsLoadingBooks] = useState(true);
@@ -59,7 +59,7 @@ const CreateRoomModal: React.FC<CreateRoomModalProps> = ({
         setSelectedBook(null);
         setSelectedVoice('SEONBI');
         setSelectedSpeed(1.0);
-        setMaxParticipants(5);
+        setMaxParticipants(8);
         setError(null);
     };
 
