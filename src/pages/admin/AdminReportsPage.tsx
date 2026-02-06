@@ -7,7 +7,7 @@ import {
 import useAuthStore from '../../stores/authStore';
 import { adminReportService } from '../../services/adminService';
 import type { Report } from '../../services/adminService';
-import { AdminSidebar } from './AdminUsersPage';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminReportsPage: React.FC = () => {
     const navigate = useNavigate();
@@ -70,7 +70,7 @@ const AdminReportsPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-900">
-            <AdminSidebar active="reports" />
+            <AdminSidebar activePath="/admin/reports" />
 
             <main className="ml-64 p-8">
                 <div className="flex items-center justify-between mb-8">

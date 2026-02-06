@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
-    LayoutDashboard, Users, AlertTriangle, Shield, X, Loader2,
-    Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
-    Zap, CheckCircle, Brain, MessageSquareWarning, Tag
+    Loader2, Brain, FileText, ChevronUp, ChevronDown, GripVertical, CheckCircle,
+    Zap, X, Save, Upload, MessageSquareWarning, AlertTriangle
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
+
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 import {
     adminBookService, adminChapterService, adminCategoryService,
@@ -420,59 +421,13 @@ const AdminBooksPage: React.FC = () => {
         }
     };
 
-    // 사이드바 메뉴 아이템
-    const menuItems = [
-        { path: '/admin/dashboard', label: '대시보드', icon: LayoutDashboard },
-        { path: '/admin/users', label: '회원 관리', icon: Users },
-        { path: '/admin/books', label: '도서 관리', icon: BookOpen, active: true },
-        { path: '/admin/categories', label: '카테고리 관리', icon: Tag },
-        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
-        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
-        // { path: '/admin/notices', label: '공지 관리', icon: Bell },
-    ];
+
+
 
     return (
         <div className="min-h-screen bg-gray-900">
             {/* 사이드바 */}
-            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
-                        <Shield size={24} className="text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-white font-bold text-lg">ReadSync</h1>
-                        <p className="text-gray-400 text-xs">Admin Panel</p>
-                    </div>
-                </div>
-
-                <nav className="space-y-2">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${item.active
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                                    }`}
-                            >
-                                <Icon size={20} />
-                                <span className="font-medium">{item.label}</span>
-                            </Link>
-                        );
-                    })}
-                </nav>
-
-                <div className="absolute bottom-6 left-6 right-6">
-                    <Link
-                        to="/"
-                        className="block text-center py-3 text-gray-400 hover:text-white transition-colors"
-                    >
-                        ← 사이트로 돌아가기
-                    </Link>
-                </div>
-            </aside>
+            <AdminSidebar activePath="/admin/books" />
 
             {/* 메인 콘텐츠 */}
             <main className="ml-64 p-8">

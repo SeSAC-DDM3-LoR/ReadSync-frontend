@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
-    LayoutDashboard, Users, BookOpen, AlertTriangle, Shield,
     Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
     Loader2, X, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import useAuthStore from '../../stores/authStore';
 import { adminCategoryService, type AdminCategory } from '../../services/adminService';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminCategoriesPage: React.FC = () => {
     const navigate = useNavigate();
@@ -108,36 +108,7 @@ const AdminCategoriesPage: React.FC = () => {
     return (
         <div className="min-h-screen bg-gray-900">
             {/* Sidebar */}
-            <aside className="fixed left-0 top-0 bottom-0 w-64 bg-gray-800 border-r border-gray-700 p-6">
-                <div className="flex items-center gap-3 mb-8">
-                    <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center">
-                        <Shield size={24} className="text-white" />
-                    </div>
-                    <div>
-                        <h1 className="text-white font-bold text-lg">ReadSync</h1>
-                        <p className="text-gray-400 text-xs">Admin Panel</p>
-                    </div>
-                </div>
-
-                <nav className="space-y-2">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        return (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${item.active
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                                    }`}
-                            >
-                                <Icon size={20} />
-                                <span className="font-medium">{item.label}</span>
-                            </Link>
-                        );
-                    })}
-                </nav>
-            </aside>
+            <AdminSidebar activePath="/admin/categories" />
 
             {/* Main Content */}
             <main className="ml-64 p-8">

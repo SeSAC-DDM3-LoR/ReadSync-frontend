@@ -7,7 +7,7 @@ import {
 import useAuthStore from '../../stores/authStore';
 import { noticeService } from '../../services/userService';
 import type { Notice } from '../../services/userService';
-import { AdminSidebar } from './AdminUsersPage';
+import AdminSidebar from '../../components/layout/AdminSidebar';
 
 const AdminNoticesPage: React.FC = () => {
     const navigate = useNavigate();
@@ -63,7 +63,7 @@ const AdminNoticesPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-gray-900">
-            <AdminSidebar active="notices" />
+            <AdminSidebar activePath="/admin/notices" />
 
             <main className="ml-64 p-8">
                 <div className="flex items-center justify-between mb-8">
