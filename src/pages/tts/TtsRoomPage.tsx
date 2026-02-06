@@ -207,6 +207,13 @@ const TtsRoomPage: React.FC = () => {
                 if (message.type === 'PLAY_AUDIO') {
                     console.log('🔊 [WebSocket] PLAY_AUDIO received:', message);
                     const audioUrl = message.audioUrl;
+                    const paragraphId = message.paragraphId; // 현재 재생 중인 문단 ID
+
+                    // 활성 문단 ID 업데이트 (오디오 종료 시 다음 문단으로 넘어가기 위해 필요)
+                    if (paragraphId) {
+                        setActiveParagraphId(paragraphId);
+                    }
+
                     if (audioUrl && audioRef.current) {
                         setIsAudioLoading(false);
                         audioRef.current.src = audioUrl;
