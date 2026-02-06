@@ -22,6 +22,7 @@ import RoomControlBar from './components/RoomControlBar'; // 하단 컨트롤 �
 import UserProfilePopup from '../../components/UserProfilePopup';
 import InviteFriendModal from '../../components/InviteFriendModal';
 import CreateRoomModal from '../../components/CreateRoomModal';
+import RoomSettingsModal from './components/RoomSettingsModal';
 
 const TtsRoomPage: React.FC = () => {
     const navigate = useNavigate();
@@ -56,6 +57,7 @@ const TtsRoomPage: React.FC = () => {
     // Modals
     const [showInviteModal, setShowInviteModal] = useState(false);
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
     const [profilePopup, setProfilePopup] = useState<{ isOpen: boolean; userId: number; position?: { x: number; y: number } }>({
         isOpen: false, userId: 0
     });
@@ -225,6 +227,21 @@ const TtsRoomPage: React.FC = () => {
                     }
                 }
 
+
+                // D. 설정 변경 (목소리/속도)
+                if (message.type === 'SETTINGS_UPDATE') {
+                    const { setting, value } = message;
+                    console.log('⚙️ [WebSocket] Settings Updated:', setting, value);
+                    setCurrentRoom(prev => {
+                        if (!prev) return null;
+                        return {
+                            ...prev,
+                            voiceType: setting === 'VOICE' ? value : prev.voiceType,
+                            playSpeed: setting === 'SPEED' ? parseFloat(value) : prev.playSpeed
+                        };
+                    });
+                }
+
                 // C. 문단 싱크 (방장이 문단을 바꿨을 때)
                 if (message.type === 'SYNC_PARAGRAPH') {
                     const targetId = message.paragraphId;
@@ -259,7 +276,11 @@ const TtsRoomPage: React.FC = () => {
         connectAndSubscribe();
 
         return () => {
-            websocketClient.unsubscribeFromRoom(currentRoomId);
+            if (currentRoomId) {
+                // 이 함수는 RoomList로 돌아갈 때도 호출되므로 
+                // 여기서 unsubscribe하면 화면 전환 시 깔끔하게 해제됨
+                websocketClient.unsubscribeFromRoom(currentRoomId);
+            }
         };
     }, [currentRoomId, currentView, refreshParticipants]); // refreshParticipants 의존성 추가
 
@@ -416,6 +437,7 @@ const TtsRoomPage: React.FC = () => {
                     onInvite={() => setShowInviteModal(true)}
                     isChatOpen={isChatOpen}
                     onToggleChat={() => setIsChatOpen(!isChatOpen)}
+                    onSettings={() => setShowSettings(true)}
                 />
 
                 <main className="relative z-10 flex-1 px-4 py-8 overflow-auto pb-24"> {/* pb-24: 하단 컨트롤 바 공간 확보 */}
@@ -462,6 +484,16 @@ const TtsRoomPage: React.FC = () => {
 
             <InviteFriendModal isOpen={showInviteModal} onClose={() => setShowInviteModal(false)} roomId={currentRoomId || 0} />
             <UserProfilePopup isOpen={profilePopup.isOpen} userId={profilePopup.userId} onClose={() => setProfilePopup({ ...profilePopup, isOpen: false })} position={profilePopup.position} />
+
+            {currentRoom && (
+                <RoomSettingsModal
+                    isOpen={showSettings}
+                    onClose={() => setShowSettings(false)}
+                    roomId={currentRoomId || 0}
+                    currentVoice={currentRoom.voiceType}
+                    currentSpeed={currentRoom.playSpeed}
+                />
+            )}
         </div>
     );
 };

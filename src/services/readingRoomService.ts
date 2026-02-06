@@ -80,6 +80,14 @@ export const readingRoomService = {
         return response.data;
     },
 
+    // 목소리 변경 (방장 전용)
+    updateVoiceType: async (roomId: number, voiceType: string) => {
+        const response = await api.patch(`/v1/reading-rooms/${roomId}/voice`, null, {
+            params: { voiceType }
+        });
+        return response.data;
+    },
+
     // 독서 시작 (방장 전용)
     startReading: async (roomId: number) => {
         const response = await api.patch(`/v1/reading-rooms/${roomId}/start`, {});
