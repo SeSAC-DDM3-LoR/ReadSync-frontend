@@ -22,7 +22,7 @@ import { paymentService, type OrderResponse } from '../services/paymentService';
 import { profileService } from '../services/userService';
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
-import { GENRES, getGenreLabels } from '../constants/genres';
+import { getGenreLabels } from '../constants/genres';
 import { bookLogService, type BookLog } from '../services/libraryService';
 
 const GENRE_ICONS = [Wand2, Heart, Skull, Rocket, Briefcase, Leaf, History, Music];
