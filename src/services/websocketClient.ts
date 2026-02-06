@@ -340,6 +340,46 @@ class WebSocketClient {
     }
 
     /**
+     * 강제 로그아웃(Kick) 알림 구독
+     */
+    subscribeToKick(
+        userId: number,
+        onKick: (message: any) => void
+    ): void {
+        console.log(`[WebSocket] Attempting to subscribe to kick notifications for user ${userId}`);
+
+        if (!this.client || this.connectionStatus !== 'CONNECTED') {
+            console.warn('⚠️ [WebSocket] Cannot subscribe to kick - not connected (yet)');
+            return;
+        }
+
+        const destination = `/user/queue/kick`;
+
+        // 이미 구독 중인지 확인
+        if (this.subscriptions.has(destination)) {
+            console.warn(`⚠️ [WebSocket] Already subscribed to ${destination}`);
+            return;
+        }
+
+        try {
+            const subscription = this.client.subscribe(destination, (message: IMessage) => {
+                console.log(`🚫 [WebSocket] KICK message received:`, message.body);
+                try {
+                    const kickData = JSON.parse(message.body);
+                    onKick(kickData);
+                } catch (error) {
+                    console.error('❌ [WebSocket] Failed to parse kick message:', error);
+                }
+            });
+
+            this.subscriptions.set(destination, subscription);
+            console.log(`✅ [WebSocket] Successfully subscribed to ${destination}`);
+        } catch (error) {
+            console.error(`❌ [WebSocket] Failed to subscribe to ${destination}:`, error);
+        }
+    }
+
+    /**
      * 사용자 초대 알림 구독
      */
     subscribeToInvitations(

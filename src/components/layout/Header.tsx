@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen, User, Menu, Search, X, ShoppingCart, LogOut, Settings, ChevronDown } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
+import { authService } from '../../services/authService';
 import { cartService } from '../../services/cartService';
 import NotificationDropdown from '../NotificationDropdown';
 
@@ -15,7 +16,7 @@ const Header: React.FC = () => {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [cartCount, setCartCount] = useState(0);
 
-  // 장바구니 개수 업데이트
+  // 장바구니 개수 및 WebSocket Kick 구독 확인
   React.useEffect(() => {
     const fetchCartCount = async () => {
       if (isAuthenticated) {
@@ -33,6 +34,25 @@ const Header: React.FC = () => {
 
     fetchCartCount();
 
+    // [New] 중복 로그인 방지 (Kick 구독)
+    if (isAuthenticated && user?.userId) {
+      const token = authService.getAccessToken();
+      if (token) {
+        console.log('[Header] Connecting to WebSocket for Kick listener...');
+        import('../../services/websocketClient').then(module => {
+          const ws = module.default;
+          ws.connect(token).then(() => {
+            ws.subscribeToKick(user.userId, (message) => {
+              console.warn('🚫 [Auto-Logout] Kick message received:', message);
+              alert(message.message || '다른 기기에서 로그인하여 로그아웃됩니다.');
+              logout();
+              navigate('/login');
+            });
+          });
+        });
+      }
+    }
+
     // 장바구니 변경 이벤트 리스너 (커스텀 이벤트)
     const handleCartUpdate = () => fetchCartCount();
     window.addEventListener('cartUpdated', handleCartUpdate);
@@ -40,7 +60,7 @@ const Header: React.FC = () => {
     return () => {
       window.removeEventListener('cartUpdated', handleCartUpdate);
     };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user?.userId, logout, navigate]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
