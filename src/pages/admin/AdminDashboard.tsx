@@ -186,6 +186,12 @@ const AdminDashboard: React.FC = () => {
                                 icon={<AlertTriangle size={24} />}
                                 highlight={stats.pendingReports > 0}
                             />
+                            <QuickLinkCard
+                                title="카테고리 관리"
+                                description="도서 카테고리 설정"
+                                link="/admin/categories"
+                                icon={<Tag size={24} />}
+                            />
                         </div>
                     </>
                 )}

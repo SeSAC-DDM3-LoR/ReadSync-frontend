@@ -193,7 +193,7 @@ const AdminUsersPage: React.FC = () => {
     );
 };
 
-// 재사용 사이드바 컴포넌트
+// 재사용 사이드바 컴포넌트 (Updated)
 const AdminSidebar: React.FC<{ active: string }> = ({ active }) => {
     const menuItems = [
         { path: '/admin/dashboard', key: 'dashboard', label: '대시보드', icon: LayoutDashboard },
