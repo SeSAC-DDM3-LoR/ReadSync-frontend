@@ -17,6 +17,7 @@ import { levelService, getExpProgress, getExpNeededForNextLevel } from '../servi
 import type { Level } from '../services/levelService';
 import { subscriptionService, type Subscription } from '../services/subscriptionService';
 import { paymentService, type OrderResponse } from '../services/paymentService';
+import { profileService } from '../services/userService';
 import type { Review, Comment } from '../services/reviewService';
 import type { ExpLog } from '../services/userService';
 import { GENRES, getGenreLabels } from '../constants/genres';
@@ -29,6 +30,7 @@ const MyPage: React.FC = () => {
 
     // Modal State
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -117,10 +119,24 @@ const MyPage: React.FC = () => {
 
                                 <button
                                     onClick={handleLogout}
-                                    className="w-full mt-6 flex items-center gap-3 px-4 py-3 rounded-xl text-red-600 hover:bg-red-50 transition-colors"
+                                    className="w-full mt-6 flex items-center gap-3 px-4 py-3 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
                                 >
                                     <LogOut size={20} />
                                     <span className="font-medium">로그아웃</span>
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (user.role === 'ADMIN') {
+                                            alert('관리자 계정은 회원 탈퇴할 수 없습니다.');
+                                            return;
+                                        }
+                                        setIsDeleteModalOpen(true);
+                                    }}
+                                    className="w-full mt-2 flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-colors"
+                                >
+                                    <User size={20} />
+                                    <span className="font-medium">회원 탈퇴</span>
                                 </button>
                             </div>
                         </div>
@@ -157,7 +173,143 @@ const MyPage: React.FC = () => {
                         }}
                     />
                 )}
+                {isDeleteModalOpen && (
+                    <DeleteAccountModal
+                        user={user}
+                        onClose={() => setIsDeleteModalOpen(false)}
+                        logout={logout}
+                    />
+                )}
             </AnimatePresence>
+        </div>
+    );
+};
+
+// 회원 탈퇴 모달
+const DeleteAccountModal: React.FC<{
+    user: any;
+    onClose: () => void;
+    logout: () => void;
+}> = ({ user, onClose, logout }) => {
+    const [password, setPassword] = useState('');
+    const [confirmationText, setConfirmationText] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const isLocalUser = user.provider === 'LOCAL';
+
+    const handleSubmit = async () => {
+        setError(null);
+
+        if (isLocalUser) {
+            if (!password) {
+                setError('비밀번호를 입력해주세요.');
+                return;
+            }
+        } else {
+            if (confirmationText !== '지금 탈퇴합니다') {
+                setError("'지금 탈퇴합니다'를 정확히 입력해주세요.");
+                return;
+            }
+        }
+
+        if (!confirm('정말 탈퇴하시겠습니까? 탈퇴 후에는 계구를 복구할 수 없습니다.')) {
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            // 1. 비밀번호 검증 (로컬 유저인 경우)
+            if (isLocalUser) {
+                const isValid = await authService.verifyPassword(password);
+                if (!isValid) {
+                    setError('비밀번호가 일치하지 않습니다.');
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            // 2. 회원 탈퇴 요청
+            await profileService.withdraw();
+
+            alert('회원 탈퇴가 완료되었습니다. 이용해 주셔서 감사합니다.');
+            await logout();
+            window.location.href = '/';
+
+        } catch (error) {
+            console.error('Withdrawal failed:', error);
+            setError('회원 탈퇴 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-8"
+            >
+                <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <User size={32} className="text-red-500" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900">회원 탈퇴</h2>
+                    <p className="text-gray-500 text-sm mt-2">
+                        탈퇴 시 모든 정보가 삭제되며<br />
+                        복구할 수 없습니다. 신중하게 결정해주세요.
+                    </p>
+                </div>
+
+                <div className="space-y-4 mb-6">
+                    {isLocalUser ? (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">비밀번호 확인</label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition-all"
+                                placeholder="비밀번호를 입력하세요"
+                            />
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-2">탈퇴 확인</label>
+                            <p className="text-sm text-gray-500 mb-2">아래 입력창에 <b>지금 탈퇴합니다</b> 를 입력해주세요.</p>
+                            <input
+                                type="text"
+                                value={confirmationText}
+                                onChange={(e) => setConfirmationText(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-red-500 focus:ring-2 focus:ring-red-100 outline-none transition-all"
+                                placeholder="지금 탈퇴합니다"
+                            />
+                        </div>
+                    )}
+
+                    {error && (
+                        <p className="text-red-500 text-sm text-center font-medium">{error}</p>
+                    )}
+                </div>
+
+                <div className="flex gap-3">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                    >
+                        취소
+                    </button>
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : '탈퇴하기'}
+                    </button>
+                </div>
+            </motion.div>
         </div>
     );
 };

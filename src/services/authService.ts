@@ -177,6 +177,14 @@ export const authService = {
         });
         return response.data;
     },
+
+    /**
+     * 비밀번호 검증 (회원탈퇴 전 확인)
+     */
+    verifyPassword: async (password: string): Promise<boolean> => {
+        const response = await api.post<boolean>('/v1/auth/verify-password', { password });
+        return response.data;
+    },
 };
 
 export default authService;

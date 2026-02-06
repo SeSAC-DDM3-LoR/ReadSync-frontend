@@ -66,6 +66,11 @@ export const profileService = {
         });
         return response.data;
     },
+
+    // 회원 탈퇴
+    withdraw: async (): Promise<void> => {
+        await api.delete('/v1/users/me');
+    },
 };
 
 // ==================== Exp Service ====================
