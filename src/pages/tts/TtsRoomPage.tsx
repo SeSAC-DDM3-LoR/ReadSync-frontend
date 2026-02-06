@@ -203,6 +203,21 @@ const TtsRoomPage: React.FC = () => {
                     }
                 }
 
+                // B-2. 백엔드에서 직접 오디오 URL 수신 (TTS 생성 완료 시)
+                if (message.type === 'PLAY_AUDIO') {
+                    console.log('🔊 [WebSocket] PLAY_AUDIO received:', message);
+                    const audioUrl = message.audioUrl;
+                    if (audioUrl && audioRef.current) {
+                        setIsAudioLoading(false);
+                        audioRef.current.src = audioUrl;
+                        audioRef.current.load();
+                        audioRef.current.play().catch((err) => {
+                            console.error('Audio play failed:', err);
+                        });
+                        setIsPlaying(true);
+                    }
+                }
+
                 // C. 문단 싱크 (방장이 문단을 바꿨을 때)
                 if (message.type === 'SYNC_PARAGRAPH') {
                     const targetId = message.paragraphId;
