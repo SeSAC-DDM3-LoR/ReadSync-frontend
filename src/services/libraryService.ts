@@ -203,3 +203,5 @@ export const getBookmarkByLibraryAndChapter = async (
 
 export default libraryService;
 
+
+// ==================== Enhanced Library Functions ====================
