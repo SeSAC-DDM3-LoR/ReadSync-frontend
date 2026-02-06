@@ -126,6 +126,13 @@ const SubscriptionStorePage: React.FC = () => {
             return;
         }
         if (plan.price === 0) return; // 무료 플랜 선택 불가
+
+        // 이미 구독 중인 경우
+        if (currentSubscription) {
+            alert('구독을 변경하려면 현재 구독을 먼저 해지해주세요.');
+            return;
+        }
+
         setSelectedPlan(plan);
         setShowPaymentModal(true);
     };
@@ -351,8 +358,12 @@ const SubscriptionStorePage: React.FC = () => {
                 {/* 플랜 카드 */}
                 <div className="grid md:grid-cols-3 gap-6 mb-12">
                     {plans.map((plan, index) => {
-                        const isCurrentPlan = currentSubscription?.planName === plan.name;
+                        const isCurrentPlan = !!(currentSubscription &&
+                            (currentSubscription.planName === plan.name ||
+                                currentSubscription.planName.includes(plan.name) ||
+                                plan.name.includes(currentSubscription.planName.replace(' 플랜', '').replace('플랜', ''))));
                         const isPopular = plan.name === '프리미엄';
+                        const hasOtherSubscription = !!(currentSubscription && !isCurrentPlan);
 
                         return (
                             <motion.div
@@ -399,17 +410,25 @@ const SubscriptionStorePage: React.FC = () => {
 
                                 <button
                                     onClick={() => handleSelectPlan(plan)}
-                                    disabled={isCurrentPlan || plan.price === 0}
+                                    disabled={isCurrentPlan || plan.price === 0 || hasOtherSubscription}
                                     className={`w-full py-3 rounded-xl font-bold transition-all ${isCurrentPlan
-                                        ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                        ? 'bg-emerald-100 text-emerald-600 cursor-not-allowed'
                                         : plan.price === 0
                                             ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                            : isPopular
-                                                ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:shadow-lg hover:-translate-y-0.5'
-                                                : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:shadow-lg hover:-translate-y-0.5'
+                                            : hasOtherSubscription
+                                                ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                                                : isPopular
+                                                    ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-white hover:shadow-lg hover:-translate-y-0.5'
+                                                    : 'bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:shadow-lg hover:-translate-y-0.5'
                                         }`}
                                 >
-                                    {isCurrentPlan ? '현재 이용 중' : plan.price === 0 ? '기본 플랜' : '구독하기'}
+                                    {isCurrentPlan
+                                        ? '구독 중'
+                                        : plan.price === 0
+                                            ? '기본 플랜'
+                                            : hasOtherSubscription
+                                                ? '해지 후 변경 가능'
+                                                : '구독하기'}
                                 </button>
                             </motion.div>
                         );

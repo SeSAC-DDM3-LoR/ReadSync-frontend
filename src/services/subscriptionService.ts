@@ -63,12 +63,11 @@ export const subscriptionService = {
             {
                 planId: 3,
                 name: '프로',
-                description: '팀/가족 공유 가능',
+                description: '최상위 프리미엄 경험',
                 price: 14900,
                 duration: 30,
                 features: [
                     '모든 프리미엄 기능 포함',
-                    '최대 5명 가족 공유',
                     '독점 콘텐츠 접근',
                     '우선 고객 지원',
                     '베타 기능 조기 접근',
