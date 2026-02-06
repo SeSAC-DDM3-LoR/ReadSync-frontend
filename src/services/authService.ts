@@ -132,6 +132,7 @@ export const authService = {
      * 직접 백엔드 서버로 연결 (Vercel 프록시 우회)
      */
     getOAuthUrl: (provider: 'google' | 'kakao' | 'naver'): string => {
+        // Vercel 환경변수 VITE_API_BASE_URL 사용, 없으면 프로덕션 기본값
         const backendUrl = import.meta.env.VITE_API_BASE_URL || 'https://readsync.kro.kr/api';
         return `${backendUrl}/oauth2/authorization/${provider}`;
     },

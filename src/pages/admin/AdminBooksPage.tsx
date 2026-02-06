@@ -5,9 +5,10 @@ import {
     BookOpen, Plus, Edit3, Trash2, Search, ChevronLeft, ChevronRight,
     LayoutDashboard, Users, AlertTriangle, Shield, X, Loader2,
     Upload, FileText, GripVertical, ChevronDown, ChevronUp, Save,
-    Zap, CheckCircle, Brain
+    Zap, CheckCircle, Brain, MessageSquareWarning
 } from 'lucide-react';
 import useAuthStore from '../../stores/authStore';
+
 import {
     adminBookService, adminChapterService,
     type AdminBook, type BookRequest, type AdminChapter
@@ -413,7 +414,8 @@ const AdminBooksPage: React.FC = () => {
         { path: '/admin/dashboard', label: '대시보드', icon: LayoutDashboard },
         { path: '/admin/users', label: '회원 관리', icon: Users },
         { path: '/admin/books', label: '도서 관리', icon: BookOpen, active: true },
-        { path: '/admin/reports', label: '신고 관리', icon: AlertTriangle },
+        { path: '/admin/reports', label: '회원 신고 관리', icon: AlertTriangle },
+        { path: '/admin/content-reports', label: '댓글/리뷰 신고 관리', icon: MessageSquareWarning },
         // { path: '/admin/notices', label: '공지 관리', icon: Bell },
     ];
 
