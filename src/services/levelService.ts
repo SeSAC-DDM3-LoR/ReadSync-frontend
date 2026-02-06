@@ -24,7 +24,7 @@ export const levelService = {
      * 모든 레벨 정보 조회
      */
     getAllLevels: async (): Promise<Level[]> => {
-        const response = await api.get<Level[]>('/api/levels');
+        const response = await api.get<Level[]>('/levels');
         return response.data;
     },
 
@@ -32,7 +32,7 @@ export const levelService = {
      * 특정 레벨 정보 조회
      */
     getLevelById: async (levelId: number): Promise<Level> => {
-        const response = await api.get<Level>(`/api/levels/${levelId}`);
+        const response = await api.get<Level>(`/levels/${levelId}`);
         return response.data;
     },
 
@@ -40,7 +40,7 @@ export const levelService = {
      * 경험치로 레벨 조회
      */
     getLevelByExperience: async (experience: number): Promise<Level> => {
-        const response = await api.get<Level>('/api/levels/by-exp', {
+        const response = await api.get<Level>('/levels/by-exp', {
             params: { experience }
         });
         return response.data;

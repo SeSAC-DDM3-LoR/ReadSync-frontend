@@ -52,42 +52,42 @@ export interface FriendRequest {
 export const communityService = {
     // 게시글 목록 조회
     getPosts: async (): Promise<CommunityPost[]> => {
-        const response = await api.get<CommunityPost[]>('/api/community/posts');
+        const response = await api.get<CommunityPost[]>('/community/posts');
         return response.data;
     },
 
     // 게시글 단건 조회
     getPost: async (postId: number): Promise<CommunityPost> => {
-        const response = await api.get<CommunityPost>(`/api/community/posts/${postId}`);
+        const response = await api.get<CommunityPost>(`/community/posts/${postId}`);
         return response.data;
     },
 
     // 게시글 작성
     createPost: async (request: PostCreateRequest): Promise<CommunityPost> => {
-        const response = await api.post<CommunityPost>('/api/community/posts', request);
+        const response = await api.post<CommunityPost>('/community/posts', request);
         return response.data;
     },
 
     // 게시글 수정
     updatePost: async (postId: number, request: PostCreateRequest): Promise<CommunityPost> => {
-        const response = await api.put<CommunityPost>(`/api/community/posts/${postId}`, request);
+        const response = await api.put<CommunityPost>(`/community/posts/${postId}`, request);
         return response.data;
     },
 
     // 게시글 삭제
     deletePost: async (postId: number): Promise<void> => {
-        await api.delete(`/api/community/posts/${postId}`);
+        await api.delete(`/community/posts/${postId}`);
     },
 
     // 게시글 댓글 목록
     getComments: async (postId: number): Promise<CommunityComment[]> => {
-        const response = await api.get<CommunityComment[]>(`/api/community/comments/post/${postId}`);
+        const response = await api.get<CommunityComment[]>(`/community/comments/post/${postId}`);
         return response.data;
     },
 
     // 댓글 작성
     createComment: async (postId: number, content: string): Promise<CommunityComment> => {
-        const response = await api.post<CommunityComment>(`/api/community/comments/post/${postId}`, {
+        const response = await api.post<CommunityComment>(`/community/comments/post/${postId}`, {
             content,
         });
         return response.data;
@@ -95,7 +95,7 @@ export const communityService = {
 
     // 댓글 수정
     updateComment: async (commentId: number, content: string): Promise<CommunityComment> => {
-        const response = await api.put<CommunityComment>(`/api/community/comments/${commentId}`, {
+        const response = await api.put<CommunityComment>(`/community/comments/${commentId}`, {
             content,
         });
         return response.data;
@@ -103,7 +103,7 @@ export const communityService = {
 
     // 댓글 삭제
     deleteComment: async (commentId: number): Promise<void> => {
-        await api.delete(`/api/community/comments/${commentId}`);
+        await api.delete(`/community/comments/${commentId}`);
     },
 };
 
