@@ -134,6 +134,17 @@ const CheckoutPage: React.FC = () => {
     const initPaymentWidget = useCallback(async (amount: number) => {
         if (isInitializedRef.current || !window.TossPayments) return;
 
+        // DOM 요소가 존재하는지 확인
+        const paymentContainer = document.getElementById('payment-widget-container');
+        const agreementContainer = document.getElementById('agreement-container');
+
+        if (!paymentContainer || !agreementContainer) {
+            // DOM이 아직 준비되지 않음 - 잠시 후 재시도
+            console.log('Payment widget containers not ready, retrying...');
+            setTimeout(() => initPaymentWidget(amount), 100);
+            return;
+        }
+
         try {
             // 일반 결제용 테스트 클라이언트 키 (payment.html과 동일)
             const clientKey = 'test_gck_docs_Ovk5rk1EwkEbP0W43n07xlzm';
