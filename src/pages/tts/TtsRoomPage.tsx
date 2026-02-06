@@ -89,10 +89,38 @@ const TtsRoomPage: React.FC = () => {
                     console.log(`[TTS] Loading chapter ${currentRoom.currentChapterId}...`);
                     const chapterData = await chapterService.getChapter(currentRoom.currentChapterId);
 
-                    // 백엔드는 bookContent 필드로 반환
-                    const contentArray = chapterData.bookContent as ChapterContent[] | undefined;
+                    let contentArray: ChapterContent[] = [];
 
-                    if (contentArray && contentArray.length > 0) {
+                    // 1. bookContent가 배열인지 확인
+                    if (Array.isArray(chapterData.bookContent)) {
+                        contentArray = chapterData.bookContent;
+                    }
+                    // 2. bookContent가 객체이고 내부에 배열이 있는 경우 (예: { content: [...] })
+                    else if (chapterData.bookContent && typeof chapterData.bookContent === 'object') {
+                        const obj = chapterData.bookContent as any;
+                        if (Array.isArray(obj.content)) contentArray = obj.content;
+                        else if (Array.isArray(obj.paragraphs)) contentArray = obj.paragraphs;
+                    }
+
+                    // 3. 내용이 없거나 에러 문자열인 경우 -> URL로 직접 Fetch 시도 (Fallback)
+                    if (contentArray.length === 0 && chapterData.bookContentPath && chapterData.bookContentPath.startsWith('http')) {
+                        console.warn('[TTS] bookContent is empty or invalid. Trying to fetch from URL:', chapterData.bookContentPath);
+                        try {
+                            const response = await fetch(chapterData.bookContentPath);
+                            if (response.ok) {
+                                const json = await response.json();
+                                if (Array.isArray(json)) contentArray = json;
+                                else if (json.content && Array.isArray(json.content)) contentArray = json.content;
+                                else if (json.paragraphs && Array.isArray(json.paragraphs)) contentArray = json.paragraphs;
+                            } else {
+                                console.error('[TTS] Failed to fetch content from URL:', response.status);
+                            }
+                        } catch (fetchError) {
+                            console.error('[TTS] Error fetching content from URL:', fetchError);
+                        }
+                    }
+
+                    if (contentArray.length > 0) {
                         // ChapterContent를 BookParagraph 형식으로 변환
                         const paragraphs: BookParagraph[] = contentArray.map((item: ChapterContent) => ({
                             id: item.id,
@@ -102,7 +130,7 @@ const TtsRoomPage: React.FC = () => {
                         setBookContent(paragraphs);
                         console.log(`[TTS] Loaded ${paragraphs.length} paragraphs`);
                     } else {
-                        console.warn('[TTS] Chapter has no content');
+                        console.warn('[TTS] Chapter has no content even after fallback');
                         setBookContent([]);
                     }
                 } catch (error) {
