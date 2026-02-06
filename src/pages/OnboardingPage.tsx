@@ -54,6 +54,7 @@ const OnboardingPage: React.FC = () => {
         setIsLoading(true);
         try {
             const response = await adminCategoryService.getAllCategories(0, 100);
+            console.log('Fetched categories for onboarding:', response.content);
             const mappedGenres = response.content.map((cat, index) => ({
                 id: cat.categoryName, // Use name as ID for preference matching
                 label: cat.categoryName,
@@ -218,6 +219,11 @@ const OnboardingPage: React.FC = () => {
                                     {isLoading ? (
                                         <div className="col-span-2 py-8 text-center text-gray-500">
                                             카테고리를 불러오는 중입니다...
+                                        </div>
+                                    ) : genres.length === 0 ? (
+                                        <div className="col-span-2 py-8 text-center text-gray-500">
+                                            등록된 카테고리가 없습니다.<br />
+                                            관리자에게 문의해주세요.
                                         </div>
                                     ) : (
                                         genres.map((genre) => {
