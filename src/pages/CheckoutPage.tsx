@@ -87,9 +87,9 @@ const CheckoutPage: React.FC = () => {
                 // URL 파라미터 제거
                 window.history.replaceState({}, '', window.location.pathname);
 
-                // 잠시 후 마이페이지로 이동
+                // 잠시 후 내 서재로 이동
                 setTimeout(() => {
-                    navigate('/mypage/subscription');
+                    navigate('/library');
                 }, 2000);
 
             } catch (err: any) {

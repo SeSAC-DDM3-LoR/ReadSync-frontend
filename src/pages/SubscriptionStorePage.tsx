@@ -305,7 +305,7 @@ const SubscriptionStorePage: React.FC = () => {
                         </span>
                     </h2>
                     <p className="text-gray-600 text-lg max-w-2xl mx-auto">
-                        프리미엄 구독으로 AI 기능 무제한, TTS 음성 읽기, 오프라인 다운로드 등
+                        프리미엄 구독으로 AI 기능 제한 해제, TTS 음성 읽기,
                         ReadSync의 모든 기능을 마음껏 이용하세요.
                     </p>
                 </motion.div>
@@ -424,8 +424,8 @@ const SubscriptionStorePage: React.FC = () => {
                     <div className="grid md:grid-cols-4 gap-6">
                         <BenefitCard
                             icon={<Zap className="text-amber-500" size={24} />}
-                            title="AI 무제한"
-                            description="AI 채팅, 요약, 분석 기능을 제한 없이 사용"
+                            title="AI 기능 제한 해제"
+                            description="AI 채팅, 요약, 분석 기능을 사용 가능"
                         />
                         <BenefitCard
                             icon={<Shield className="text-emerald-500" size={24} />}
@@ -439,8 +439,8 @@ const SubscriptionStorePage: React.FC = () => {
                         />
                         <BenefitCard
                             icon={<CreditCard className="text-blue-500" size={24} />}
-                            title="오프라인"
-                            description="다운로드하여 인터넷 없이 독서"
+                            title="TTS 방 생성 가능"
+                            description="친구들과 함께 책 읽기"
                         />
                     </div>
                 </motion.div>

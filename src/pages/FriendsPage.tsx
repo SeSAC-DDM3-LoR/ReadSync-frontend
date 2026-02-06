@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     Users, UserPlus, UserMinus, Clock, Check, X,
-    Loader2, BookOpen
+    Loader2, BookOpen, Search
 } from 'lucide-react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -24,6 +24,19 @@ const FriendsPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'friends' | 'received' | 'sent' | 'invitations'>('friends');
     const [processingId, setProcessingId] = useState<number | null>(null);
+
+    // 친구 추가 모달 상태
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [searchInput, setSearchInput] = useState('');
+    const [searchResult, setSearchResult] = useState<{
+        userId: number;
+        nickname: string;
+        tag: string;
+        profileImage: string | null;
+    } | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [isSendingRequest, setIsSendingRequest] = useState(false);
 
     useEffect(() => {
         if (!isAuthenticated) {
@@ -127,6 +140,58 @@ const FriendsPage: React.FC = () => {
         }
     };
 
+    // 친구 검색 (닉네임#태그)
+    const handleSearch = async () => {
+        // 입력 형식 검증: "닉네임#0000"
+        const match = searchInput.match(/^(.+)#(\d{4})$/);
+        if (!match) {
+            setSearchError('형식: 닉네임#0000 (예: 홍길동#1234)');
+            setSearchResult(null);
+            return;
+        }
+
+        const [, nickname, tag] = match;
+        setIsSearching(true);
+        setSearchError(null);
+        setSearchResult(null);
+
+        try {
+            const result = await friendshipService.searchByTag(nickname, tag);
+            setSearchResult(result);
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                setSearchError('유저를 찾을 수 없습니다.');
+            } else {
+                setSearchError('검색 중 오류가 발생했습니다.');
+            }
+        } finally {
+            setIsSearching(false);
+        }
+    };
+
+    // 친구 요청 보내기
+    const handleSendRequest = async () => {
+        if (!searchResult) return;
+
+        setIsSendingRequest(true);
+        try {
+            await friendshipService.sendRequest(searchResult.userId);
+            alert(`${searchResult.nickname}님에게 친구 요청을 보냈습니다!`);
+            setShowAddModal(false);
+            setSearchInput('');
+            setSearchResult(null);
+            loadData(); // 보낸 요청 목록 새로고침
+        } catch (err: any) {
+            if (err.response?.status === 409) {
+                alert('이미 친구이거나 요청을 보냈습니다.');
+            } else {
+                alert('친구 요청에 실패했습니다.');
+            }
+        } finally {
+            setIsSendingRequest(false);
+        }
+    };
+
     // 방 초대 수락
     const handleAcceptRoomInvitation = async (invitationId: number, roomId: number) => {
         setProcessingId(invitationId);
@@ -163,12 +228,19 @@ const FriendsPage: React.FC = () => {
                     <motion.div
                         initial={{ opacity: 0, y: -20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mb-8"
+                        className="mb-8 flex items-center justify-between"
                     >
                         <h1 className="text-3xl font-extrabold text-gray-900 flex items-center gap-3">
                             <Users className="text-emerald-500" />
                             친구
                         </h1>
+                        <button
+                            onClick={() => setShowAddModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 transition-colors"
+                        >
+                            <UserPlus size={20} />
+                            친구 추가
+                        </button>
                     </motion.div>
 
                     {/* 탭 */}
@@ -393,6 +465,116 @@ const FriendsPage: React.FC = () => {
                     )}
                 </div>
             </main>
+
+            {/* 친구 추가 모달 */}
+            <AnimatePresence>
+                {showAddModal && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+                        onClick={() => setShowAddModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="bg-white rounded-2xl p-6 w-full max-w-md"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <h2 className="text-xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <UserPlus className="text-emerald-500" />
+                                친구 추가
+                            </h2>
+
+                            {/* 검색 입력 */}
+                            <div className="mb-4">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    닉네임#태그로 검색
+                                </label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={searchInput}
+                                        onChange={e => setSearchInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                        placeholder="예: 홍길동#1234"
+                                        className="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    />
+                                    <button
+                                        onClick={handleSearch}
+                                        disabled={isSearching || !searchInput.trim()}
+                                        className="px-4 py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isSearching ? (
+                                            <Loader2 size={20} className="animate-spin" />
+                                        ) : (
+                                            <Search size={20} />
+                                        )}
+                                    </button>
+                                </div>
+                                {searchError && (
+                                    <p className="text-red-500 text-sm mt-2">{searchError}</p>
+                                )}
+                            </div>
+
+                            {/* 검색 결과 */}
+                            {searchResult && (
+                                <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center overflow-hidden">
+                                            {searchResult.profileImage ? (
+                                                <img
+                                                    src={searchResult.profileImage}
+                                                    alt={searchResult.nickname}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <span className="text-emerald-600 font-bold text-lg">
+                                                    {searchResult.nickname.charAt(0)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-gray-900">
+                                                {searchResult.nickname}
+                                                <span className="text-gray-400 font-normal ml-1">
+                                                    #{searchResult.tag}
+                                                </span>
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={handleSendRequest}
+                                            disabled={isSendingRequest}
+                                            className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-medium hover:bg-emerald-600 disabled:opacity-50"
+                                        >
+                                            {isSendingRequest ? (
+                                                <Loader2 size={16} className="animate-spin" />
+                                            ) : (
+                                                '친구 요청'
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 닫기 버튼 */}
+                            <button
+                                onClick={() => {
+                                    setShowAddModal(false);
+                                    setSearchInput('');
+                                    setSearchResult(null);
+                                    setSearchError(null);
+                                }}
+                                className="w-full py-3 text-gray-600 font-medium hover:bg-gray-100 rounded-xl transition-colors"
+                            >
+                                닫기
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <Footer />
         </div>

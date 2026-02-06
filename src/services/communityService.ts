@@ -157,6 +157,19 @@ export const friendshipService = {
     unblock: async (friendshipId: number): Promise<void> => {
         await api.post(`/v1/friendship/${friendshipId}/unblock`);
     },
+
+    // 닉네임#태그로 유저 검색
+    searchByTag: async (nickname: string, tag: string): Promise<{
+        userId: number;
+        nickname: string;
+        tag: string;
+        profileImage: string | null;
+    }> => {
+        const response = await api.get('/v1/users/find', {
+            params: { nickname, tag }
+        });
+        return response.data;
+    },
 };
 
 export default communityService;
