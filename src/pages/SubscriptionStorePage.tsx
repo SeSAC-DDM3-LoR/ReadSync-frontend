@@ -81,12 +81,14 @@ const SubscriptionStorePage: React.FC = () => {
 
     const loadData = async () => {
         try {
-            const [plansData, subscriptionData] = await Promise.all([
+            const [plansData, subscriptionData, billingKeyData] = await Promise.all([
                 subscriptionService.getPlans(),
                 isAuthenticated ? subscriptionService.getMySubscription().catch(() => null) : Promise.resolve(null),
+                isAuthenticated ? subscriptionService.getBillingKeyStatus().catch(() => ({ registered: false })) : Promise.resolve({ registered: false }),
             ]);
             setPlans(plansData);
             setCurrentSubscription(subscriptionData);
+            setIsBillingKeyRegistered(billingKeyData.registered);
         } catch (error) {
             console.error('Failed to load subscription data:', error);
         } finally {
@@ -133,8 +135,11 @@ const SubscriptionStorePage: React.FC = () => {
 
         // 빌링키 등록 확인
         if (!isBillingKeyRegistered) {
-            alert('먼저 결제 카드를 등록해주세요.');
-            setShowPaymentModal(false);
+            const confirmRegister = confirm('결제 카드가 등록되지 않았습니다. 카드를 등록하시겠습니까?');
+            if (confirmRegister) {
+                setShowPaymentModal(false);
+                handleCardRegistration();
+            }
             return;
         }
 

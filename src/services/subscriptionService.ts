@@ -103,6 +103,12 @@ export const subscriptionService = {
         await api.post('/v1/payments/billing-key', request);
     },
 
+    // 빌링키(카드) 등록 여부 확인
+    getBillingKeyStatus: async (): Promise<{ registered: boolean }> => {
+        const response = await api.get<{ registered: boolean }>('/v1/payments/billing-key/status');
+        return response.data;
+    },
+
     // 구독 해지
     cancelSubscription: async (subId: number): Promise<void> => {
         await api.delete(`/v1/subscriptions/${subId}`);
