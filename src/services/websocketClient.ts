@@ -42,7 +42,7 @@ class WebSocketClient {
 
             this.connectionStatus = 'CONNECTING';
 
-            const wsUrl = `${baseUrl}/api/ws`; // 수정: /ws → /api/ws
+            const wsUrl = `${baseUrl}/ws`; // Corrected: baseUrl includes /api, so just append /ws
             console.log('[WebSocket] Connection URL:', wsUrl);
 
             this.client = new Client({

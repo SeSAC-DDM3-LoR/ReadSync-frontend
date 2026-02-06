@@ -95,31 +95,31 @@ export const creditService = {
 export const noticeService = {
     // 공지사항 목록
     getNotices: async (): Promise<Notice[]> => {
-        const response = await api.get<Notice[]>('/api/notices');
+        const response = await api.get<Notice[]>('/notices');
         return response.data;
     },
 
     // 공지사항 단건 조회
     getNotice: async (noticeId: number): Promise<Notice> => {
-        const response = await api.get<Notice>(`/api/notices/${noticeId}`);
+        const response = await api.get<Notice>(`/notices/${noticeId}`);
         return response.data;
     },
 
     // [관리자] 공지사항 작성
     createNotice: async (title: string, content: string): Promise<Notice> => {
-        const response = await api.post<Notice>('/api/notices', { title, content });
+        const response = await api.post<Notice>('/notices', { title, content });
         return response.data;
     },
 
     // [관리자] 공지사항 수정
     updateNotice: async (noticeId: number, title: string, content: string): Promise<Notice> => {
-        const response = await api.put<Notice>(`/api/notices/${noticeId}`, { title, content });
+        const response = await api.put<Notice>(`/notices/${noticeId}`, { title, content });
         return response.data;
     },
 
     // [관리자] 공지사항 삭제
     deleteNotice: async (noticeId: number): Promise<void> => {
-        await api.delete(`/api/notices/${noticeId}`);
+        await api.delete(`/notices/${noticeId}`);
     },
 };
 
@@ -128,31 +128,31 @@ export const noticeService = {
 export const inquiryService = {
     // 내 문의 목록
     getMyInquiries: async (): Promise<Inquiry[]> => {
-        const response = await api.get<Inquiry[]>('/api/inquiry');
+        const response = await api.get<Inquiry[]>('/inquiry');
         return response.data;
     },
 
     // 문의 단건 조회
     getInquiry: async (inquiryId: number): Promise<Inquiry> => {
-        const response = await api.get<Inquiry>(`/api/inquiry/${inquiryId}`);
+        const response = await api.get<Inquiry>(`/inquiry/${inquiryId}`);
         return response.data;
     },
 
     // 문의 작성
     createInquiry: async (request: InquiryRequest): Promise<Inquiry> => {
-        const response = await api.post<Inquiry>('/api/inquiry', request);
+        const response = await api.post<Inquiry>('/inquiry', request);
         return response.data;
     },
 
     // 문의 수정
     updateInquiry: async (inquiryId: number, request: InquiryRequest): Promise<Inquiry> => {
-        const response = await api.put<Inquiry>(`/api/inquiry/${inquiryId}`, request);
+        const response = await api.put<Inquiry>(`/inquiry/${inquiryId}`, request);
         return response.data;
     },
 
     // 문의 삭제
     deleteInquiry: async (inquiryId: number): Promise<void> => {
-        await api.delete(`/api/inquiry/${inquiryId}`);
+        await api.delete(`/inquiry/${inquiryId}`);
     },
 };
 
